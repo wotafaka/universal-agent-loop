@@ -1,0 +1,2 @@
+# Exact stored bytes are part of the preserved reference's contract.
+/reference/** -text

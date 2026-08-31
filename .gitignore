@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+.validation/
+.env
+.env.*
+*.key
+*.pem
+*.pfx
+*.log
+*.jsonl

@@ -1,0 +1,182 @@
+{
+  "schema": "source-inventory/1",
+  "captured_date": "2026-08-31",
+  "use": "private extraction anchors; source content not included; not proof of test execution",
+  "members": [
+    {
+      "path": ".agents/skills/weather-data-footprint-safety/SKILL.md",
+      "bytes": 2772,
+      "sha256": "6d85dd4825a2b73295c27c04952d487d89573ad1521fb876c42289c6b58008ce"
+    },
+    {
+      "path": ".agents/skills/weather-evidence-based-performance/SKILL.md",
+      "bytes": 2590,
+      "sha256": "b79b1eee12ab2ac05b36ebbd2de034627bd7cfa7e28d0fc973b3f6bedd762631"
+    },
+    {
+      "path": ".agents/skills/weather-invariant-and-property-testing/SKILL.md",
+      "bytes": 2877,
+      "sha256": "ba427a2cc2a458b5060bee786a48c184923d0c59adb34ceef331080bef63cbdf"
+    },
+    {
+      "path": ".agents/skills/weather-research-integrity/SKILL.md",
+      "bytes": 2531,
+      "sha256": "307dc833ed75758a7cf842bac7dbc133b3f9099915aa632a8af03ae9a310d4df"
+    },
+    {
+      "path": ".agents/skills/weather-research-workflow/SKILL.md",
+      "bytes": 2535,
+      "sha256": "63dfc925d59db775faa503659a1bf7f02bc21c98e70d19cfe52d0523da729cc5"
+    },
+    {
+      "path": ".agents/skills/weather-source-and-capture-integrity/SKILL.md",
+      "bytes": 2081,
+      "sha256": "ce7a45a6c5c5f27166a4963f3c66e06e953be3c71584f822be3c87ebd698777e"
+    },
+    {
+      "path": ".agents/skills/weather-systematic-debugging/SKILL.md",
+      "bytes": 2858,
+      "sha256": "d7d4e811ddcf778c481f9b890030ac7da2b063558a096af3c569f75f05cd69b9"
+    },
+    {
+      "path": ".agents/skills/weather-test-driven-development/SKILL.md",
+      "bytes": 3361,
+      "sha256": "6669e8ae48c9e9ca95581eaf11cd8262f87661b0237c23f03fc16ee18ddcc378"
+    },
+    {
+      "path": ".agents/skills/weather-trading-capital-safety/SKILL.md",
+      "bytes": 4418,
+      "sha256": "96f02098070b61fa314de707526022aea62a7de295c1c46ef2bd88933edd1b4b"
+    },
+    {
+      "path": ".agents/skills/weather-walk-forward-validation/SKILL.md",
+      "bytes": 2203,
+      "sha256": "5e8ce400bcaef09d0bf0d979d40701beb81d96ae8249b232983f7309e132a3ba"
+    },
+    {
+      "path": "BRAIN/14_AGENT_ROLES_AND_HANDOFF.md",
+      "bytes": 9815,
+      "sha256": "f5e3f4b5a15ba6f027ddd12470093d37c7f49bc195a7c583e4ead329fe785aae"
+    },
+    {
+      "path": "BRAIN/15_INTEGRATED_EXTERNAL_DELIVERY_WORKFLOW.md",
+      "bytes": 86506,
+      "sha256": "740a8bcd87bd14480efa1d5c057ddb5c9930001a48424a3f0cfd3f3055c9e7c5"
+    },
+    {
+      "path": "BRAIN/16_AGENT_LOOP_VNEXT_AUTHORITY_AND_EVIDENCE_CONTRACT.md",
+      "bytes": 71597,
+      "sha256": "f666aae15188b83fa9b8a25a6f847b96c785a7b3e59d301f00e2943341284d9f"
+    },
+    {
+      "path": "BRAIN/ANTI_PATTERNS.md",
+      "bytes": 6365,
+      "sha256": "23c4debe91c6a33b084b6049884a6a6cb8283d3fbd833fad4ae6b72795df07f7"
+    },
+    {
+      "path": "BRAIN/LESSONS_LEARNED.md",
+      "bytes": 11319,
+      "sha256": "a463bfcdb633b751b1685caa7cd4131d505b71c06c649914f3bb4443c63eb305"
+    },
+    {
+      "path": "TASKS/ARCHITECT_REVIEW_TEMPLATE.md",
+      "bytes": 7447,
+      "sha256": "d23d62e839c8126da18ce09d6e784eed523c6ffdbb2945285a43d35b9d46b742"
+    },
+    {
+      "path": "TASKS/IMPLEMENTATION_REPORT_TEMPLATE.md",
+      "bytes": 6846,
+      "sha256": "403c60461de655295639752ded2e4713674d372995a9ea6c7c9af2c1d22896ee"
+    },
+    {
+      "path": "TASKS/TASK_TEMPLATE.md",
+      "bytes": 15065,
+      "sha256": "7ff092c2f83dc8bcee7125577df3a0d7fc72bd86d05d7a1ae92fcbdbd6364183"
+    },
+    {
+      "path": "tests/test_agent_loop_contract.py",
+      "bytes": 148851,
+      "sha256": "b6660d03f25a04e2866c92bc11b3bb95eeabe648011053b25ab7ae78e703ca3c"
+    },
+    {
+      "path": "tests/test_agent_loop_export.py",
+      "bytes": 35011,
+      "sha256": "d28e5a7240f52257eac345c33ede2b4562498c9037794487b752cada9128f587"
+    },
+    {
+      "path": "tests/test_agent_loop_routing.py",
+      "bytes": 76732,
+      "sha256": "e0b93fbc3bd2005b5797270f38900881a37eb3bdf065e0f8a3504de450338803"
+    },
+    {
+      "path": "tests/test_delivery_timing.py",
+      "bytes": 93838,
+      "sha256": "34d9e72940f115cf9ce3c31b2fc26996eafa5c677ae9b59dca9dca6d43406dad"
+    },
+    {
+      "path": "tests/test_external_audit_launcher.py",
+      "bytes": 43174,
+      "sha256": "fd4aad8e9ca4993fdc1dd959420b5034ebf8f616e8503a1644eb791617683afa"
+    },
+    {
+      "path": "tests/test_external_audit_package.py",
+      "bytes": 25636,
+      "sha256": "2edc502f5a687b3e39e3674ebebf0a8a7adee2fccb6edb7476c5d8be820b701b"
+    },
+    {
+      "path": "tests/test_external_glm_launcher.py",
+      "bytes": 284723,
+      "sha256": "35d5c669fbcc1d4d5b130a8625ae89a53a08af3d053e7b9285a8ea45ea1af621"
+    },
+    {
+      "path": "tests/test_project_memory.py",
+      "bytes": 365833,
+      "sha256": "30ef163b7c263f5ea85de79fd2a33f1bdfb9e0ff01b75d24e283c0d228cfd43e"
+    },
+    {
+      "path": "tools/agent_loop_contract.py",
+      "bytes": 56974,
+      "sha256": "75a655c46127e54d2b7fd30a1179e1d59c97264ad605c3d16915c4d530dd9d64"
+    },
+    {
+      "path": "tools/agent_loop_routing.py",
+      "bytes": 72537,
+      "sha256": "172723a33a47903a4f3306201d78dd0ba4eddc33c501eb8381a1d18613cd5314"
+    },
+    {
+      "path": "tools/analyze_delivery_timing.py",
+      "bytes": 57787,
+      "sha256": "2d3de1279dcb47cd369a624b0cb9b04e4729a3ff519dc84bdf962c0f3632b1fa"
+    },
+    {
+      "path": "tools/build_external_audit_package.py",
+      "bytes": 10876,
+      "sha256": "11dd4cdbe4aaf8ebb24155460e45400e91b04bc2690041817672de6d066bb21e"
+    },
+    {
+      "path": "tools/export_agent_loop_core.py",
+      "bytes": 10684,
+      "sha256": "c5270a591f251c402f33c4903a72bfe9e188108b3fe842caae09846559c81bde"
+    },
+    {
+      "path": "tools/project_memory.py",
+      "bytes": 262194,
+      "sha256": "8179998676382912ba1200042a52a09dfa8688b72a7d5718ca7c35ad732f985b"
+    },
+    {
+      "path": "tools/run_external_audit.py",
+      "bytes": 45799,
+      "sha256": "ac32927ca1a4364a427f2703049d49701a9edf31367f587de5782a1d8e1b4a6b"
+    },
+    {
+      "path": "tools/run_external_glm.py",
+      "bytes": 211502,
+      "sha256": "24dad8edfe9e93ccaeff58406cee10a352280fb8771bbafa7f80c4bee024c1f4"
+    },
+    {
+      "path": "tools/run_focused_tests.py",
+      "bytes": 11159,
+      "sha256": "a15ba9498ed192cdeb080613018d8e9bcbc8a6b16884a65f912989e2f58d9884"
+    }
+  ]
+}

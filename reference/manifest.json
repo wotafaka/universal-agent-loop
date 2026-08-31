@@ -1,0 +1,14 @@
+{
+  "schema": "agent-loop-core-export-manifest/1",
+  "policy": {"encoding":"utf-8","line_endings":"as-stored","normalization":"none","max_files":32,"max_total_bytes":1048576},
+  "license": {"grant":"NONE","publication":"WITHHELD","use":"owner-private review"},
+  "source": {"core":{"path":"tools/agent_loop_contract.py","release":"weather-v0.9.106-risk-adaptive-intent-preflight-convergence"},"templates":{"task":"weather-v0.9.106-risk-adaptive-intent-preflight-convergence"}},
+  "members": [
+    {"path":"EXPORT_AUDIT.md","bytes":1636,"sha256":"4b5a9a48e406526c6b7f7b4938ebd4a9226d4bd58156b2e91455b916d0d232c5","encoding":"utf-8","line_endings":"as-stored","origin":"TEMPLATES/AGENT_LOOP_CORE/EXPORT_AUDIT.md"},
+    {"path":"README.md","bytes":4812,"sha256":"bf6ca1fa8e693f81644e0e78ce3c78948f334d3c5762c3b187c18c01313d80e3","encoding":"utf-8","line_endings":"as-stored","origin":"TEMPLATES/AGENT_LOOP_CORE/README.md"},
+    {"path":"REVIEW.md","bytes":2967,"sha256":"1140065fa80dc3744f80c51c82b4511e424678efdc5006cf19555ded7f38ddbf","encoding":"utf-8","line_endings":"as-stored","origin":"TEMPLATES/AGENT_LOOP_CORE/REVIEW.md"},
+    {"path":"TASK.md","bytes":6050,"sha256":"3ea0dd3983ea9dbac2b0ec5038fb76f868bce94aae4dae34d98f1cb5facd41d8","encoding":"utf-8","line_endings":"as-stored","origin":"TEMPLATES/AGENT_LOOP_CORE/TASK.md"},
+    {"path":"agent_loop_contract.py","bytes":56974,"sha256":"75a655c46127e54d2b7fd30a1179e1d59c97264ad605c3d16915c4d530dd9d64","encoding":"utf-8","line_endings":"as-stored","origin":"tools/agent_loop_contract.py"},
+    {"path":"smoke.py","bytes":25272,"sha256":"d88d402814796eb4c7b47f71e7ffa987bf96b56b25c41021f1526f839d392414","encoding":"utf-8","line_endings":"as-stored","origin":"TEMPLATES/AGENT_LOOP_CORE/smoke.py"}
+  ]
+}
