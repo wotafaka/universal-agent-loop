@@ -21,7 +21,13 @@ from . import (attempts, audit, authority, claims, config as _config_mod,
                validation)
 from .errors import UALError
 from .hashing import load_json
+from .paths import read_regular_file
 from .taskfile import load_task
+
+# Documented hard byte caps for external file transmission: reads happen
+# once, contained, before any claim/run/child exists (docs/RUNTIME.md).
+STDIN_FILE_MAX_BYTES = 8 * 1024 * 1024
+BASIS_FILE_MAX_BYTES = 1024 * 1024
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -134,10 +140,16 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--task", required=True)
     p.add_argument("--purpose", required=True)
     p.add_argument("--argv-json", default=None)
-    p.add_argument("--stdin-file", default=None)
+    p.add_argument("--stdin-file", default=None,
+                   help="Contained regular file read before any claim/"
+                        "run exists; hard cap 8 MiB. ENGINEER stdin must "
+                        "be a task-authorized pack and pass the secret "
+                        "scan.")
     p.add_argument("--ack-path", default=None)
     p.add_argument("--session-id", default=None)
-    p.add_argument("--basis-file", default=None)
+    p.add_argument("--basis-file", default=None,
+                   help="Contained regular progress-basis file read "
+                        "before any claim/run exists; hard cap 1 MiB.")
     p.add_argument("--log-cap-bytes", type=int,
                    default=runner.DEFAULT_LOG_CAP_BYTES)
     p.add_argument("--env-overlay-json", default=None)
@@ -506,15 +518,28 @@ def _dispatch(args, project: Path) -> dict:
                             or {}).get("overlay") or {}}
         stdin_bytes = b""
         if args.stdin_file:
-            stdin_path = project / args.stdin_file
-            stdin_bytes = stdin_path.read_bytes()
+            stdin_bytes = read_regular_file(
+                project, args.stdin_file, label="STDIN",
+                max_bytes=STDIN_FILE_MAX_BYTES)
+            if args.purpose == "ENGINEER":
+                packs.verify_engineer_stdin(project, task["id"],
+                                            args.stdin_file, stdin_bytes)
+        basis_text = None
+        if args.basis_file:
+            basis_raw = read_regular_file(
+                project, args.basis_file, label="BASIS",
+                max_bytes=BASIS_FILE_MAX_BYTES)
+            try:
+                basis_text = basis_raw.decode("utf-8")
+            except UnicodeDecodeError:
+                raise UALError("BASIS_UNREADABLE",
+                               args.basis_file) from None
         payload = runner.run_child(
             project, task, purpose=args.purpose, argv=argv,
             stdin_bytes=stdin_bytes, overlay=overlay,
             ack_rel=args.ack_path, session_id=args.session_id,
             log_cap_bytes=args.log_cap_bytes,
-            basis_text=(project / args.basis_file).read_text("utf-8")
-            if args.basis_file else None)
+            basis_text=basis_text)
         if args.purpose == "ENGINEER":
             _record_engineer_session(project, task["id"], args.session_id)
         return payload

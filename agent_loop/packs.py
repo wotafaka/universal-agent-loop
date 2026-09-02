@@ -49,6 +49,75 @@ def find_secret(data: bytes) -> str | None:
     return None
 
 
+def verify_engineer_stdin(project: Path, task_id: str, rel: str,
+                          data: bytes) -> str:
+    """Authorize ENGINEER stdin as an immutable task-authorized pack.
+
+    The only admitted payloads are this task's context pack (bytes
+    equal to the digest recorded in ``context_pack_index.json``) or a
+    manifest-bound repair pack for this task (bytes equal to the pack
+    digest in its ``manifest.json``; when the current attempt declares
+    a pack iteration, exactly that iteration). The conservative secret
+    scan runs after authorization. Anything else refuses before a
+    claim, log or child exists. Returns the pack kind."""
+    from . import attempts
+    from .context import INDEX_MAX_BYTES
+    normalized = Path(rel.replace("\\", "/"))
+    task_prefix = Path(".agent-loop") / "tasks" / task_id
+    kind = None
+    iteration = None
+    if normalized == task_prefix / "context_pack.md":
+        index_path = (task_dir(project, task_id) /
+                      "context_pack_index.json")
+        if index_path.is_file():
+            index = load_json(index_path, max_bytes=INDEX_MAX_BYTES)
+            if isinstance(index, dict) and \
+                    index.get("schema") == "ual-context-index/1" and \
+                    index.get("task") == task_id and \
+                    index.get("payload_sha256") == sha256_hex(data):
+                kind = "CONTEXT_PACK"
+    else:
+        parts = normalized.parts
+        packs_prefix = tuple((task_prefix / "packs").parts)
+        if len(parts) == len(packs_prefix) + 2 and \
+                parts[:len(packs_prefix)] == packs_prefix and \
+                parts[-1] == "repair_pack.md" and \
+                parts[-2].startswith("iteration_"):
+            try:
+                iteration = int(parts[-2][len("iteration_"):])
+            except ValueError:
+                iteration = None
+            if iteration is not None:
+                manifest_path = (task_dir(project, task_id) / "packs" /
+                                 f"iteration_{iteration}" /
+                                 "manifest.json")
+                if manifest_path.is_file():
+                    manifest = load_json(manifest_path,
+                                         max_bytes=PACK_MAX_BYTES)
+                    if isinstance(manifest, dict) and \
+                            manifest.get("schema") == PACK_SCHEMA and \
+                            manifest.get("task") == task_id and \
+                            manifest.get("iteration") == iteration and \
+                            (manifest.get("pack") or {}).get("sha256") \
+                            == sha256_hex(data):
+                        kind = "REPAIR_PACK"
+    if kind is None:
+        raise UALError("ENGINEER_STDIN_UNAUTHORIZED", rel)
+    if kind == "REPAIR_PACK" and iteration is not None:
+        seq = attempts.current_seq(project, task_id)
+        if seq is not None:
+            payload = attempts.current_payload(project, task_id)
+            bound = (payload.get("progress") or {}).get("pack_iteration")
+            if bound is not None and bound != iteration:
+                raise UALError("ENGINEER_STDIN_UNAUTHORIZED",
+                               f"attempt {seq} binds pack iteration "
+                               f"{bound}, not {iteration}")
+    category = find_secret(data)
+    if category is not None:
+        raise UALError("SECRET_MATERIAL_SUSPECTED", f"{category}:{rel}")
+    return kind
+
+
 def stable_progress_basis(task: str, repair_batch_text: str) -> str | None:
     if (not isinstance(task, str) or not task.strip()
             or not isinstance(repair_batch_text, str)):
@@ -273,6 +342,75 @@ def attempt_progress(project: Path, task: dict, batch_rel: str,
             "claim_identity": claim_identity}
 
 
+def _render_repair_pack(task_id: str, iteration: int, basis: str,
+                        task_text: str, commands: list, batch_text: str,
+                        touched_text: str, members: list,
+                        bodies: dict) -> bytes:
+    """The one deterministic repair-pack renderer, shared by build and
+    verify so re-rendered expected bytes are comparable byte-for-byte."""
+    pack_lines = [
+        f"# Repair pack — `{task_id}` — iteration {iteration}",
+        "",
+        f"> Schema `{PACK_SCHEMA}`. Deterministic, credential-free,",
+        "> project-local, built write-once LAST by the architect and",
+        "> verified FIRST by the engineer. Any drift fails closed to the",
+        "> full canonical startup; never repair from an unverified pack.",
+        "",
+        "## Pack header",
+        "",
+        f"- task: `{task_id}`",
+        "- task_status: `FIX_REQUIRED`",
+        f"- iteration: `{iteration}`",
+        f"- schema: `{PACK_SCHEMA}`",
+        f"- progress_basis: `{basis}`",
+        "- fallback: `FULL_CANONICAL_STARTUP_ON_ANY_DRIFT`",
+        "",
+        "## Complete task",
+        "",
+        "```json",
+        task_text.rstrip("\n"),
+        "```",
+        "",
+        "## Required skills (complete bodies)",
+        "",
+    ]
+    for member in members:
+        if member["role"] == "skill":
+            body = bodies[member["path"]]
+            pack_lines += [f"### {member['path']}", "",
+                           body.rstrip("\n"), ""]
+    for member in members:
+        if member["role"] == "rules":
+            body = bodies[member["path"]]
+            pack_lines += [f"### {member['path']} (rules)", "",
+                           body.rstrip("\n"), ""]
+    pack_lines += [
+        "## Validation command budget",
+        "",
+    ]
+    for ordinal, argv in commands:
+        pack_lines.append(f"- ordinal `{ordinal}`: "
+                          f"`{json.dumps(argv, ensure_ascii=True)}`")
+    pack_lines += [
+        "",
+        "## Frozen repair batch",
+        "",
+        batch_text.rstrip("\n"),
+        "",
+        "## Touched source/test map",
+        "",
+        touched_text.rstrip("\n"),
+        "",
+        "## Canonical member manifest",
+        "",
+    ]
+    for member in members:
+        pack_lines.append(f"- `{member['path']}` ({member['role']}): "
+                          f"sha256 `{member['sha256']}`, "
+                          f"bytes {member['bytes']}")
+    return ("\n".join(pack_lines) + "\n").encode("utf-8")
+
+
 def build_pack(project: Path, task: dict, iteration: int, batch_rel: str,
                touched_rel: str) -> dict:
     task_id = task["id"]
@@ -309,78 +447,25 @@ def build_pack(project: Path, task: dict, iteration: int, batch_rel: str,
         data = path.read_bytes()
         members.append({"path": rel, "role": role, "bytes": len(data),
                         "sha256": sha256_hex(data)})
-    skill_bodies = []
-    for member in members:
-        if member["role"] == "skill":
-            body = (project / member["path"]).read_text(encoding="utf-8")
-            skill_bodies.append((member["path"], body))
     members.append({"path": batch_rel, "role": "repair_batch",
                     "bytes": len(batch_bytes),
                     "sha256": sha256_hex(batch_bytes)})
     members.append({"path": touched_rel, "role": "touched_map",
                     "bytes": len(touched_bytes),
                     "sha256": sha256_hex(touched_bytes)})
-    from .context import mandatory_closure
     commands = [(c.get("ordinal"), c.get("argv"))
                 for c in (task.get("validation") or {}).get("commands") or []]
-    pack_lines = [
-        f"# Repair pack — `{task_id}` — iteration {iteration}",
-        "",
-        f"> Schema `{PACK_SCHEMA}`. Deterministic, credential-free,",
-        "> project-local, built write-once LAST by the architect and",
-        "> verified FIRST by the engineer. Any drift fails closed to the",
-        "> full canonical startup; never repair from an unverified pack.",
-        "",
-        "## Pack header",
-        "",
-        f"- task: `{task_id}`",
-        "- task_status: `FIX_REQUIRED`",
-        f"- iteration: `{iteration}`",
-        f"- schema: `{PACK_SCHEMA}`",
-        f"- progress_basis: `{basis}`",
-        "- fallback: `FULL_CANONICAL_STARTUP_ON_ANY_DRIFT`",
-        "",
-        "## Complete task",
-        "",
-        "```json",
-        task_bytes.decode("utf-8").rstrip("\n"),
-        "```",
-        "",
-        "## Required skills (complete bodies)",
-        "",
-    ]
-    for rel, body in skill_bodies:
-        pack_lines += [f"### {rel}", "", body.rstrip("\n"), ""]
+    bodies = {}
     for member in members:
-        if member["role"] == "rules":
-            body = (project / member["path"]).read_text(encoding="utf-8")
-            pack_lines += [f"### {member['path']} (rules)", "",
-                           body.rstrip("\n"), ""]
-    pack_lines += [
-        "## Validation command budget",
-        "",
-    ]
-    for ordinal, argv in commands:
-        pack_lines.append(f"- ordinal `{ordinal}`: "
-                          f"`{json.dumps(argv, ensure_ascii=True)}`")
-    pack_lines += [
-        "",
-        "## Frozen repair batch",
-        "",
-        batch_text.rstrip("\n"),
-        "",
-        "## Touched source/test map",
-        "",
-        touched_bytes.decode("utf-8").rstrip("\n"),
-        "",
-        "## Canonical member manifest",
-        "",
-    ]
-    for member in members:
-        pack_lines.append(f"- `{member['path']}` ({member['role']}): "
-                          f"sha256 `{member['sha256']}`, "
-                          f"bytes {member['bytes']}")
-    pack_bytes = ("\n".join(pack_lines) + "\n").encode("utf-8")
+        if member["role"] in ("skill", "rules"):
+            bodies[member["path"]] = (project /
+                                      member["path"]).read_bytes() \
+                .decode("utf-8")
+    pack_bytes = _render_repair_pack(
+        task_id, iteration, basis,
+        task_bytes.decode("utf-8"), commands,
+        batch_bytes.decode("utf-8"), touched_bytes.decode("utf-8"),
+        members, bodies)
     if len(pack_bytes) > PACK_MAX_BYTES:
         raise UALError("PACK_OVER_BOUND", str(len(pack_bytes)))
     category = find_secret(pack_bytes)
@@ -421,10 +506,13 @@ def exclusive_write_bytes_guarded(path: Path, data: bytes,
 
 def verify_pack_readonly(project: Path, task_id: str,
                          iteration: int) -> list:
-    """Read-only full pack revalidation: pack/manifest hashes, task bytes,
-    and every manifest-bound live input (skills, AGENTS.md, repair batch,
-    touched map). Returns an error list; empty means the pack still
-    matches the repository. Writes nothing."""
+    """Read-only full pack revalidation: manifest identity, pack/task
+    hashes, the exact expected member set derived from the live task
+    contract, every manifest-bound live input, the recomputed progress
+    basis, and a byte-exact re-render of the pack from those
+    manifest-bound live inputs — so synchronized inner-content plus
+    outer-hash tampering still refuses. Returns an error list; empty
+    means the pack still matches the repository. Writes nothing."""
     directory = task_dir(project, task_id) / "packs" / f"iteration_{iteration}"
     pack_path = directory / "repair_pack.md"
     manifest_path = directory / "manifest.json"
@@ -435,24 +523,98 @@ def verify_pack_readonly(project: Path, task_id: str,
     if not isinstance(manifest, dict) or manifest.get("schema") != PACK_SCHEMA:
         return ["MANIFEST_WRONG_SCHEMA"]
     errors = []
-    if manifest.get("pack", {}).get("sha256") != sha256_hex(pack_bytes):
+    if manifest.get("task") != task_id:
+        errors.append(f"PACK_TASK_MISMATCH:{manifest.get('task')!r}")
+    if manifest.get("iteration") != iteration:
+        errors.append(
+            f"PACK_ITERATION_MISMATCH:{manifest.get('iteration')!r}")
+    pack_binding = manifest.get("pack") or {}
+    if pack_binding.get("sha256") != sha256_hex(pack_bytes) or \
+            pack_binding.get("bytes") != len(pack_bytes):
         errors.append("PACK_HASH_CONFLICT")
     task_path = project / "task.json"
     task_bytes = task_path.read_bytes()
-    if manifest.get("task_file", {}).get("sha256") != \
-            sha256_hex(task_bytes):
+    task_binding = manifest.get("task_file") or {}
+    if task_binding.get("sha256") != sha256_hex(task_bytes) or \
+            task_binding.get("bytes") != len(task_bytes):
         errors.append("PACK_TASK_DRIFT")
-    for member in manifest.get("members") or []:
+    try:
+        live_task = json.loads(task_bytes.decode("utf-8"))
+        if not isinstance(live_task, dict):
+            live_task = None
+    except (UnicodeDecodeError, ValueError):
+        live_task = None
+    members = manifest.get("members")
+    if not isinstance(members, list) or not members:
+        errors.append("PACK_MEMBER_SET_DRIFT:manifest members missing")
+        return errors
+    expected = [("task.json", "task")]
+    if live_task is not None:
+        expected += [(rel, "skill")
+                     for rel in live_task.get("required_skills") or []]
+    if (project / "AGENTS.md").is_file():
+        expected.append(("AGENTS.md", "rules"))
+    batch_rels = [m.get("path") for m in members
+                  if m.get("role") == "repair_batch"]
+    touched_rels = [m.get("path") for m in members
+                    if m.get("role") == "touched_map"]
+    if len(batch_rels) != 1 or len(touched_rels) != 1:
+        errors.append("PACK_MEMBER_INCOMPLETE:repair batch/touched map")
+    else:
+        expected += [(batch_rels[0], "repair_batch"),
+                     (touched_rels[0], "touched_map")]
+    if [(m.get("path"), m.get("role")) for m in members] != expected:
+        errors.append("PACK_MEMBER_SET_DRIFT:manifest members do not "
+                      "match the live task closure plus the declared "
+                      "repair inputs")
+        return errors
+    render_ok = True
+    bodies = {}
+    role_bytes = {}
+    for member in members:
         rel = member.get("path")
         try:
             member_path = resolve_inside(project, rel, label="PACK_MEMBER")
         except UALError:
             errors.append(f"PACK_MEMBER_ESCAPE:{rel}")
+            render_ok = False
             continue
         if not member_path.is_file():
             errors.append(f"PACK_MEMBER_MISSING:{rel}")
-        elif member.get("sha256") != sha256_hex(member_path.read_bytes()):
+            render_ok = False
+            continue
+        data = member_path.read_bytes()
+        if member.get("sha256") != sha256_hex(data) or \
+                member.get("bytes") != len(data):
             errors.append(f"PACK_MEMBER_DRIFT:{rel}")
+            render_ok = False
+            continue
+        role_bytes[member["role"]] = data
+        if member["role"] in ("skill", "rules"):
+            try:
+                bodies[rel] = data.decode("utf-8")
+            except UnicodeDecodeError:
+                errors.append(f"PACK_MEMBER_DRIFT:{rel}")
+                render_ok = False
+    if not render_ok or live_task is None:
+        if live_task is None:
+            errors.append("PACK_TASK_DRIFT")
+        return errors
+    batch_text = role_bytes["repair_batch"].decode("utf-8")
+    touched_text = role_bytes["touched_map"].decode("utf-8")
+    if stable_progress_basis(task_id, batch_text) != \
+            manifest.get("progress_basis"):
+        errors.append("PACK_BASIS_DRIFT")
+    commands = [(c.get("ordinal"), c.get("argv"))
+                for c in (live_task.get("validation") or {}).get("commands")
+                or []]
+    rendered = _render_repair_pack(
+        task_id, iteration, manifest.get("progress_basis"),
+        task_bytes.decode("utf-8"), commands, batch_text, touched_text,
+        members, bodies)
+    if rendered != pack_bytes:
+        errors.append("PACK_CONTENT_DRIFT:pack bytes differ from the "
+                      "re-rendered manifest-bound content")
     return errors
 
 

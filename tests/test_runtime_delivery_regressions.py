@@ -2306,5 +2306,524 @@ class PACK3_PrelaunchPackDrift(unittest.TestCase):
                           if c["status"] == "ACTIVE"], [])
 
 
+def _envelope_json_write(path, envelope):
+    path.write_bytes(
+        (json.dumps(envelope, ensure_ascii=True, sort_keys=True,
+                    indent=2) + "\n").encode("utf-8"))
+
+
+def _manifest_json_write(path, manifest):
+    path.write_bytes(
+        (json.dumps(manifest, ensure_ascii=False, sort_keys=True,
+                    indent=2) + "\n").encode("utf-8"))
+
+
+class C8_TransmissionContainment(unittest.TestCase):
+    """CONTINUATION 8 / D1: external file transmission boundaries.
+
+    --stdin-file and --basis-file must resolve inside the project
+    through the containment primitive as regular non-link files under
+    documented hard byte caps, with all reads before any claim/run
+    exists. ENGINEER stdin must additionally be an immutable
+    task-authorized pack that passes the conservative secret scan.
+    """
+
+    def setUp(self):
+        self.project = h.fresh_project("c8-tx", self)
+        h.write_task(self.project)
+        h.write_child(self.project, "check_demo.py", h.check_script(True))
+        h.authority(self.project)
+
+    def _outside(self, name="c8-outside-payload.txt"):
+        path = self.project.parent / name
+        path.write_bytes(b"outside\n")
+        self.addCleanup(path.unlink, missing_ok=True)
+        return path
+
+    def _assert_no_claim_or_run(self):
+        claims = self.project / ".agent-loop" / "claims"
+        runs = self.project / ".agent-loop" / "runs"
+        self.assertFalse(claims.is_dir() and any(claims.iterdir()))
+        self.assertFalse(runs.is_dir() and any(runs.iterdir()))
+
+    def test_absolute_stdin_path_refused_before_claim_or_run(self):
+        h.expect_refusal(
+            self.project, "run", "--task", "demo-task", "--purpose",
+            "ENGINEER", "--session-id", "sess-engineer",
+            "--stdin-file", str(self._outside()), code="STDIN_ESCAPE")
+        self._assert_no_claim_or_run()
+
+    def test_dotdot_stdin_path_refused(self):
+        outside = self._outside()
+        h.expect_refusal(
+            self.project, "run", "--task", "demo-task", "--purpose",
+            "OTHER", "--argv-json",
+            json.dumps([h.sys_executable(), "check_demo.py"]),
+            "--stdin-file",
+            "../" + outside.name, code="STDIN_ESCAPE")
+        self._assert_no_claim_or_run()
+
+    def test_stdin_through_directory_link_escape_refused(self):
+        outside = self.project.parent / "c8-outside-dir"
+        outside.mkdir(exist_ok=True)
+        (outside / "payload.txt").write_bytes(b"escaped\n")
+        self.addCleanup(shutil.rmtree, outside, ignore_errors=True)
+        link = self.project / "c8-junc"
+        if os.name == "nt":
+            made = subprocess.run(
+                ["cmd", "/c", "mklink", "/J", str(link), str(outside)],
+                capture_output=True, text=True).returncode == 0
+        else:
+            try:
+                os.symlink(outside, link, target_is_directory=True)
+                made = True
+            except OSError:
+                made = False
+        if not made:
+            self.skipTest("directory link unavailable on this host")
+        h.expect_refusal(
+            self.project, "run", "--task", "demo-task", "--purpose",
+            "OTHER", "--argv-json",
+            json.dumps([h.sys_executable(), "check_demo.py"]),
+            "--stdin-file", "c8-junc/payload.txt", code="STDIN_ESCAPE")
+
+    def test_interior_symlink_stdin_refused(self):
+        (self.project / "stdin.txt").write_bytes(b"payload\n")
+        link = self.project / "stdin_link.txt"
+        try:
+            os.symlink(self.project / "stdin.txt", link)
+        except OSError:
+            self.skipTest("symlinks unavailable on this host")
+        h.expect_refusal(
+            self.project, "run", "--task", "demo-task", "--purpose",
+            "OTHER", "--argv-json",
+            json.dumps([h.sys_executable(), "check_demo.py"]),
+            "--stdin-file", "stdin_link.txt", code="STDIN_ESCAPE")
+
+    def test_missing_stdin_file_refused(self):
+        h.expect_refusal(
+            self.project, "run", "--task", "demo-task", "--purpose",
+            "OTHER", "--argv-json",
+            json.dumps([h.sys_executable(), "check_demo.py"]),
+            "--stdin-file", "absent.txt", code="STDIN_NOT_FILE")
+
+    def test_oversize_stdin_refused_before_run(self):
+        (self.project / "big_stdin.txt").write_bytes(
+            b"x" * (8 * 1024 * 1024 + 1))
+        h.expect_refusal(
+            self.project, "run", "--task", "demo-task", "--purpose",
+            "OTHER", "--argv-json",
+            json.dumps([h.sys_executable(), "check_demo.py"]),
+            "--stdin-file", "big_stdin.txt", code="STDIN_OVER_BOUND")
+        self._assert_no_claim_or_run()
+
+    def test_oversize_basis_refused_before_claim(self):
+        (self.project / "big_basis.md").write_bytes(
+            b"# Repair batch\n\n" + b"x" * (1024 * 1024 + 1))
+        h.expect_refusal(
+            self.project, "run", "--task", "demo-task", "--purpose",
+            "ENGINEER", "--session-id", "sess-engineer",
+            "--basis-file", "big_basis.md", code="BASIS_OVER_BOUND")
+        self._assert_no_claim_or_run()
+
+    def test_unauthorized_engineer_stdin_refused(self):
+        (self.project / "stdin.txt").write_bytes(b"payload\n")
+        h.expect_refusal(
+            self.project, "run", "--task", "demo-task", "--purpose",
+            "ENGINEER", "--session-id", "sess-engineer",
+            "--stdin-file", "stdin.txt",
+            code="ENGINEER_STDIN_UNAUTHORIZED")
+        self._assert_no_claim_or_run()
+
+    def test_engineer_stdin_accepts_verified_context_pack(self):
+        h.run_cli(self.project, "context", "build", "--task", "demo-task")
+        proc, run = h.run_cli(
+            self.project, "run", "--task", "demo-task", "--purpose",
+            "ENGINEER", "--session-id", "sess-engineer",
+            "--stdin-file",
+            ".agent-loop/tasks/demo-task/context_pack.md")
+        self.assertEqual(run["exit_code"], 0)
+
+    def test_tampered_pack_stdin_refused(self):
+        h.run_cli(self.project, "context", "build", "--task", "demo-task")
+        pack = (self.project / ".agent-loop" / "tasks" / "demo-task" /
+                "context_pack.md")
+        pack.write_bytes(pack.read_bytes() + b"tampered\n")
+        h.expect_refusal(
+            self.project, "run", "--task", "demo-task", "--purpose",
+            "ENGINEER", "--session-id", "sess-engineer",
+            "--stdin-file", ".agent-loop/tasks/demo-task/context_pack.md",
+            code="ENGINEER_STDIN_UNAUTHORIZED")
+
+    def test_engineer_stdin_passes_secret_scan_even_for_packs(self):
+        (self.project / "AGENTS.md").write_text(
+            "rules\napi" + "_key = deadbeef\n", encoding="utf-8")
+        h.run_cli(self.project, "context", "build", "--task", "demo-task")
+        h.expect_refusal(
+            self.project, "run", "--task", "demo-task", "--purpose",
+            "ENGINEER", "--session-id", "sess-engineer",
+            "--stdin-file", ".agent-loop/tasks/demo-task/context_pack.md",
+            code="SECRET_MATERIAL_SUSPECTED")
+
+    def test_engineer_stdin_accepts_manifest_bound_repair_pack(self):
+        h.run_cli(self.project, "status", "set", "--task", "demo-task",
+                  "--status", "ACTIVE")
+        h.run_cli(self.project, "status", "set", "--task", "demo-task",
+                  "--status", "FIX_REQUIRED")
+        (self.project / "batch.md").write_text(
+            "# Repair batch\n\nfix\n", encoding="utf-8")
+        (self.project / "touched.md").write_text(
+            "- src/demo.py\n", encoding="utf-8")
+        h.run_cli(self.project, "pack", "build", "--task", "demo-task",
+                  "--iteration", "1", "--batch", "batch.md",
+                  "--touched", "touched.md")
+        h.run_cli(self.project, "pack", "verify", "--task", "demo-task",
+                  "--iteration", "1")
+        proc, run = h.run_cli(
+            self.project, "run", "--task", "demo-task", "--purpose",
+            "ENGINEER", "--session-id", "sess-engineer",
+            "--stdin-file",
+            ".agent-loop/tasks/demo-task/packs/iteration_1/repair_pack.md")
+        self.assertEqual(run["exit_code"], 0)
+
+
+class C8_EnvelopeCompleteness(SpineFixture):
+    """CONTINUATION 8 / D2: the envelope verifier derives the exact
+    expected member/skill sets from the live task contract, validates
+    every recorded entry and recomputes the aggregate candidate digest;
+    a self-declared envelope cannot hide removals or forge digests."""
+
+    def setUp(self):
+        self._build("c8-envelope", with_engineer=False)
+
+    def _envelope_path(self):
+        envelope_dir = (self.project / ".agent-loop" / "tasks" /
+                        "demo-task" / "attempts" / "attempt_00000001" /
+                        "envelope")
+        return sorted(envelope_dir.glob("envelope_*.json"))[-1]
+
+    def _load(self):
+        return json.loads(self._envelope_path().read_text("utf-8"))
+
+    def test_removed_member_entry_refuses_verify(self):
+        envelope = self._load()
+        envelope["members"] = [m for m in envelope["members"]
+                               if m["path"] != "src/demo.py"]
+        _envelope_json_write(self._envelope_path(), envelope)
+        h.expect_refusal(self.project, "envelope", "verify", "--task",
+                          "demo-task", code="CANDIDATE_MEMBER_SET_DRIFT")
+
+    def test_extra_member_entry_refuses_verify(self):
+        envelope = self._load()
+        extra = dict(envelope["members"][0])
+        child = self.project / "check_demo.py"
+        extra["path"] = "check_demo.py"
+        extra["bytes"] = child.stat().st_size
+        extra["sha256"] = hashlib.sha256(child.read_bytes()).hexdigest()
+        envelope["members"] = envelope["members"] + [extra]
+        _envelope_json_write(self._envelope_path(), envelope)
+        h.expect_refusal(self.project, "envelope", "verify", "--task",
+                          "demo-task", code="CANDIDATE_MEMBER_SET_DRIFT")
+
+    def test_duplicate_member_entry_refuses_verify(self):
+        envelope = self._load()
+        envelope["members"] = envelope["members"] + \
+            [dict(envelope["members"][0])]
+        _envelope_json_write(self._envelope_path(), envelope)
+        h.expect_refusal(self.project, "envelope", "verify", "--task",
+                          "demo-task", code="CANDIDATE_MEMBER_SET_DRIFT")
+
+    def test_byte_count_forgery_refuses_verify(self):
+        envelope = self._load()
+        envelope["members"][0]["bytes"] = \
+            envelope["members"][0]["bytes"] + 1
+        _envelope_json_write(self._envelope_path(), envelope)
+        h.expect_refusal(self.project, "envelope", "verify", "--task",
+                          "demo-task", code="CANDIDATE_MEMBER_DRIFT")
+
+    def test_candidate_digest_forgery_refuses_verify_and_seal(self):
+        envelope = self._load()
+        envelope["candidate_sha256"] = "f" * 64
+        _envelope_json_write(self._envelope_path(), envelope)
+        h.expect_refusal(self.project, "envelope", "verify", "--task",
+                          "demo-task", code="CANDIDATE_DIGEST_FORGERY")
+        review_text(self.project)
+        h.expect_refusal(self.project, "review", "seal", "--task",
+                         "demo-task", "--review", "review.md",
+                         "--verdict", "PASS",
+                         "--reviewer-session", "sess-reviewer",
+                         code="CANDIDATE_DIGEST_FORGERY")
+
+    def test_removed_skill_entry_refuses_verify(self):
+        project = h.fresh_project("c8-skill-env", self)
+        h.write_task(project,
+                     required_skills=["skills/demo-skill/SKILL.md"])
+        skill_dir = project / "skills" / "demo-skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("demo skill body\n",
+                                            encoding="utf-8")
+        h.write_child(project, "check_demo.py", h.check_script(True))
+        h.authority(project)
+        for i in range(2):
+            proc, run = h.run_cli(
+                project, "run", "--task", "demo-task", "--purpose",
+                "VALIDATION",
+                "--argv-json", json.dumps(
+                    [h.sys_executable(), "check_demo.py"]))
+            h.run_cli(project, "validate", "record", "--task",
+                      "demo-task", "--run", run["run_id"],
+                      "--ordinal", "1")
+            if i == 0:
+                (project / "src" / "demo.py").write_bytes(b"VALUE = 2\n")
+        (project / "report" / "IMPLEMENTATION.md").write_text(
+            "done\n", encoding="utf-8")
+        h.run_cli(project, "refresh", "--task", "demo-task")
+        h.run_cli(project, "report-check", "--task", "demo-task")
+        h.run_cli(project, "close", "--task", "demo-task")
+        h.run_cli(project, "envelope", "freeze", "--task", "demo-task")
+        envelope_dir = (project / ".agent-loop" / "tasks" / "demo-task" /
+                        "attempts" / "attempt_00000001" / "envelope")
+        path = sorted(envelope_dir.glob("envelope_*.json"))[-1]
+        envelope = json.loads(path.read_text("utf-8"))
+        envelope["skills"] = []
+        _envelope_json_write(path, envelope)
+        h.expect_refusal(project, "envelope", "verify", "--task",
+                          "demo-task", code="CANDIDATE_SKILL_SET_DRIFT")
+
+
+class C8_AuditInnerContent(unittest.TestCase):
+    """CONTINUATION 8 / D3: audit package verification must re-render
+    the exact payload from manifest-bound live inputs; synchronized
+    inner-content + outer-hash tampering cannot pass."""
+
+    def setUp(self):
+        project = h.fresh_project("c8-audit", None)
+        self.addCleanup(shutil.rmtree, project, ignore_errors=True)
+        self.project = project
+        h.write_task(project, audit={"required": True})
+        h.write_child(project, "check_demo.py", h.check_script(True))
+        h.authority(project)
+        for i in range(2):
+            proc, run = h.run_cli(
+                project, "run", "--task", "demo-task", "--purpose",
+                "VALIDATION",
+                "--argv-json", json.dumps(
+                    [h.sys_executable(), "check_demo.py"]))
+            h.run_cli(project, "validate", "record", "--task",
+                      "demo-task", "--run", run["run_id"],
+                      "--ordinal", "1")
+            if i == 0:
+                (project / "src" / "demo.py").write_bytes(b"VALUE = 2\n")
+        (project / "report" / "IMPLEMENTATION.md").write_text(
+            "done\n", encoding="utf-8")
+        h.run_cli(project, "refresh", "--task", "demo-task")
+        h.run_cli(project, "report-check", "--task", "demo-task")
+        h.run_cli(project, "close", "--task", "demo-task")
+        h.run_cli(project, "envelope", "freeze", "--task", "demo-task")
+        proc, payload = h.run_cli(
+            project, "audit", "package", "--task", "demo-task",
+            "--iteration", "1", "--input", "src/demo.py",
+            "--instruction", "task.json",
+            "--validation", "report/IMPLEMENTATION.md")
+        self.package = payload["package"]
+
+    def _manifest_path(self):
+        return self.project / self.package / "manifest.json"
+
+    def _load_manifest(self):
+        return json.loads(self._manifest_path().read_text("utf-8"))
+
+    def _rewrite_payload_from_manifest(self, manifest):
+        from agent_loop.audit import render_package_payload
+        entries = []
+        for entry in manifest["inputs"]:
+            entries.append((entry["role"], entry["path"],
+                            (self.project / entry["path"]).read_bytes()))
+        payload = render_package_payload(entries)
+        payload_path = self.project / self.package / "audit_payload.bin"
+        payload_path.write_bytes(payload)
+        manifest["payload"] = {
+            "path": "audit_payload.bin", "bytes": len(payload),
+            "sha256": hashlib.sha256(payload).hexdigest()}
+        _manifest_json_write(self._manifest_path(), manifest)
+
+    def test_synchronized_payload_and_manifest_tamper_refused(self):
+        payload_path = self.project / self.package / "audit_payload.bin"
+        tampered = payload_path.read_bytes() + \
+            b">>>FILE role=\"input\" path=\"forged.md\" forged\n"
+        payload_path.write_bytes(tampered)
+        manifest = self._load_manifest()
+        manifest["payload"]["bytes"] = len(tampered)
+        manifest["payload"]["sha256"] = hashlib.sha256(
+            tampered).hexdigest()
+        _manifest_json_write(self._manifest_path(), manifest)
+        h.expect_refusal(self.project, "audit", "verify", "--task",
+                          "demo-task", "--package", self.package,
+                          code="AUDIT_PAYLOAD_CONTENT_MISMATCH")
+
+    def test_live_input_drift_refused(self):
+        (self.project / "src" / "demo.py").write_bytes(b"VALUE = 999\n")
+        h.expect_refusal(self.project, "audit", "verify", "--task",
+                          "demo-task", "--package", self.package,
+                          code="AUDIT_INPUT_DRIFT")
+
+    def test_manifest_task_mismatch_refused(self):
+        manifest = self._load_manifest()
+        manifest["task"] = "other-task"
+        _manifest_json_write(self._manifest_path(), manifest)
+        h.expect_refusal(self.project, "audit", "verify", "--task",
+                          "demo-task", "--package", self.package,
+                          code="AUDIT_PACKAGE_TASK_MISMATCH")
+
+    def test_manifest_iteration_mismatch_refused(self):
+        manifest = self._load_manifest()
+        manifest["iteration"] = 2
+        _manifest_json_write(self._manifest_path(), manifest)
+        h.expect_refusal(self.project, "audit", "verify", "--task",
+                          "demo-task", "--package", self.package,
+                          code="AUDIT_PACKAGE_ITERATION_MISMATCH")
+
+    def test_duplicate_declared_input_refused(self):
+        manifest = self._load_manifest()
+        manifest["inputs"] = manifest["inputs"] + \
+            [dict(manifest["inputs"][0])]
+        manifest["input_count"] = len(manifest["inputs"])
+        manifest["total_bytes"] = sum(entry["bytes"]
+                                      for entry in manifest["inputs"])
+        _manifest_json_write(self._manifest_path(), manifest)
+        h.expect_refusal(self.project, "audit", "verify", "--task",
+                          "demo-task", "--package", self.package,
+                          code="AUDIT_INPUT_DUPLICATE")
+
+    def test_declared_totals_forgery_refused(self):
+        manifest = self._load_manifest()
+        manifest["total_bytes"] = manifest["total_bytes"] + 1
+        _manifest_json_write(self._manifest_path(), manifest)
+        h.expect_refusal(self.project, "audit", "verify", "--task",
+                          "demo-task", "--package", self.package,
+                          code="AUDIT_TOTALS_MISMATCH")
+
+    def test_synchronized_input_reordering_refused(self):
+        manifest = self._load_manifest()
+        manifest["inputs"] = list(reversed(manifest["inputs"]))
+        self._rewrite_payload_from_manifest(manifest)
+        h.expect_refusal(self.project, "audit", "verify", "--task",
+                          "demo-task", "--package", self.package,
+                          code="AUDIT_INPUT_ORDER_INVALID")
+
+    def test_synchronized_invalid_role_refused(self):
+        manifest = self._load_manifest()
+        manifest["inputs"][0]["role"] = "system_override"
+        self._rewrite_payload_from_manifest(manifest)
+        h.expect_refusal(self.project, "audit", "verify", "--task",
+                          "demo-task", "--package", self.package,
+                          code="AUDIT_ROLE_INVALID")
+
+
+class C8_RepairPackInnerContent(unittest.TestCase):
+    """CONTINUATION 8 / D3: repair pack verification must re-render the
+    exact pack from manifest-bound live inputs; synchronized pack+manifest
+    tampering cannot pass."""
+
+    def setUp(self):
+        project = h.fresh_project("c8-pack", None)
+        self.addCleanup(shutil.rmtree, project, ignore_errors=True)
+        self.project = project
+        h.write_task(project)
+        h.write_child(project, "check_demo.py", h.check_script(True))
+        h.run_cli(project, "status", "set", "--task", "demo-task",
+                  "--status", "ACTIVE")
+        h.run_cli(project, "status", "set", "--task", "demo-task",
+                  "--status", "FIX_REQUIRED")
+        (project / "batch.md").write_text(
+            "# Repair batch\n\nfix\n", encoding="utf-8")
+        (project / "touched.md").write_text(
+            "- src/demo.py\n", encoding="utf-8")
+        h.run_cli(project, "pack", "build", "--task", "demo-task",
+                  "--iteration", "1", "--batch", "batch.md",
+                  "--touched", "touched.md")
+
+    def _pack_dir(self):
+        return (self.project / ".agent-loop" / "tasks" / "demo-task" /
+                "packs" / "iteration_1")
+
+    def test_synchronized_pack_and_manifest_tamper_refused(self):
+        pack_path = self._pack_dir() / "repair_pack.md"
+        tampered = pack_path.read_bytes() + b"\n## Forged extra section\n"
+        pack_path.write_bytes(tampered)
+        manifest_path = self._pack_dir() / "manifest.json"
+        manifest = json.loads(manifest_path.read_text("utf-8"))
+        manifest["pack"]["bytes"] = len(tampered)
+        manifest["pack"]["sha256"] = hashlib.sha256(tampered).hexdigest()
+        manifest_path.write_bytes(
+            json.dumps(manifest, ensure_ascii=True, sort_keys=True,
+                       indent=2).encode("utf-8") + b"\n")
+        h.expect_refusal(self.project, "pack", "verify", "--task",
+                          "demo-task", "--iteration", "1",
+                          code="PACK_CONTENT_DRIFT")
+
+    def test_extra_manifest_member_refused(self):
+        (self.project / "extra.md").write_bytes(b"extra\n")
+        manifest_path = self._pack_dir() / "manifest.json"
+        manifest = json.loads(manifest_path.read_text("utf-8"))
+        manifest["members"].append(
+            {"path": "extra.md", "role": "skill", "bytes": 6,
+             "sha256": hashlib.sha256(b"extra\n").hexdigest()})
+        manifest_path.write_bytes(
+            json.dumps(manifest, ensure_ascii=True, sort_keys=True,
+                       indent=2).encode("utf-8") + b"\n")
+        h.expect_refusal(self.project, "pack", "verify", "--task",
+                          "demo-task", "--iteration", "1",
+                          code="PACK_MEMBER_SET_DRIFT")
+
+
+class C8_ContextPackInnerContent(unittest.TestCase):
+    """CONTINUATION 8 / D3: context pack verification must re-render the
+    exact pack from index-bound live inputs; synchronized pack+index
+    tampering cannot pass."""
+
+    def setUp(self):
+        project = h.fresh_project("c8-ctx", None)
+        self.addCleanup(shutil.rmtree, project, ignore_errors=True)
+        self.project = project
+        h.write_task(project)
+        h.run_cli(project, "context", "build", "--task", "demo-task")
+
+    def _paths(self):
+        directory = (self.project / ".agent-loop" / "tasks" /
+                     "demo-task")
+        return (directory / "context_pack.md",
+                directory / "context_pack_index.json")
+
+    def test_synchronized_pack_and_index_tamper_refused(self):
+        pack_path, index_path = self._paths()
+        tampered = pack_path.read_bytes() + b"## Forged suffix\n"
+        pack_path.write_bytes(tampered)
+        index = json.loads(index_path.read_text("utf-8"))
+        index["payload_sha256"] = hashlib.sha256(tampered).hexdigest()
+        index_path.write_bytes(
+            (json.dumps(index, indent=2, sort_keys=True) +
+             "\n").encode("utf-8"))
+        h.expect_refusal(self.project, "context", "verify", "--task",
+                          "demo-task", "--pack",
+                          ".agent-loop/tasks/demo-task/context_pack.md",
+                          code="CONTEXT_PAYLOAD_CONTENT_MISMATCH")
+
+    def test_extra_index_member_refused(self):
+        (self.project / "extra.md").write_bytes(b"extra\n")
+        pack_path, index_path = self._paths()
+        index = json.loads(index_path.read_text("utf-8"))
+        index["members"].append(
+            {"path": "extra.md", "role": "skill", "bytes": 6,
+             "sha256": hashlib.sha256(b"extra\n").hexdigest()})
+        index_path.write_bytes(
+            (json.dumps(index, indent=2, sort_keys=True) +
+             "\n").encode("utf-8"))
+        h.expect_refusal(self.project, "context", "verify", "--task",
+                          "demo-task", "--pack",
+                          ".agent-loop/tasks/demo-task/context_pack.md",
+                          code="CONTEXT_INDEX_SET_DRIFT")
+
+
 if __name__ == "__main__":
     unittest.main()

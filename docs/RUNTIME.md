@@ -99,6 +99,14 @@ for one project does not automatically authorize transmission from another proje
   until the authorized owner adjudicates the exact run. No automatic stale-lock deletion.
 - Startup failures must leave honest provenance. A Windows invalid inherited stdin handle
   is a spawn-boundary defect, not grounds to cherry-pick a passing retry in another console.
+- External file transmission (`run --stdin-file` / `--basis-file`) resolves through the
+  containment primitive only: absolute paths, `..`, symlink/junction components and
+  non-regular files refuse before any claim, run or child exists. Reads happen once under
+  documented hard byte caps (stdin 8 MiB, basis 1 MiB) before the claim is acquired.
+  ENGINEER stdin must additionally be an immutable task-authorized pack — this task's
+  digest-verified context pack or a manifest-bound repair pack for the attempt's bound
+  iteration — and must pass the conservative secret scan before any claim/run/child;
+  ordinary non-engineer uses stay provider-neutral and contained.
 
 ## Mechanical supervision first; optional AI observer
 
@@ -197,6 +205,16 @@ that record through the configured-primary gate.
 Send a secret-scanned immutable package bound to the exact latest candidate and task.
 Verify bytes before use, and again on return. Bind verdict to package and actual route.
 A successful provider process or outer AUDIT_RESULT is not an inner PASS.
+Package verification re-renders the exact payload from the manifest-bound live inputs
+and requires byte equality: exact task and directory iteration, canonical path ordering,
+only the three declared input roles (`input`, `instruction`, `validation`), unique
+complete declared input set, per-input live byte counts and hashes, declared totals,
+exact framing and no trailing or unlisted bytes — synchronized payload+manifest
+tampering refuses. Repair
+packs and context packs verify the same way: the verifier re-derives the expected member
+set from the live task contract, re-renders the pack from manifest/index-bound live
+inputs and compares bytes, so a self-consistent outer hash without the exact embedded
+inputs is never sufficient.
 No old audit may accept a repaired candidate. Multiple conflicting terminal records
 require adjudication rather than selecting the convenient result.
 

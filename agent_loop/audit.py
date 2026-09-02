@@ -25,6 +25,7 @@ PAYLOAD_NAME = "audit_payload.bin"
 MANIFEST_NAME = "manifest.json"
 MAX_INPUTS = 32
 MAX_TOTAL_BYTES = 8 * 1024 * 1024
+INPUT_ROLES = ("input", "instruction", "validation")
 RESULT_MAX_BYTES = 1024 * 1024
 ROUTE_RECEIPT_SCHEMA = "ual-audit-route-receipt/1"
 ROUTE_RECEIPT_MAX_BYTES = 64 * 1024
@@ -33,6 +34,22 @@ ROUTE_KIND_FAILURE = "PROVIDER_FAILURE"
 ROUTE_KINDS = (ROUTE_KIND_RESULT, ROUTE_KIND_FAILURE)
 VALID_VERDICTS = ("PASS", "CONDITIONAL_PASS", "FAIL", "BLOCKED")
 VALID_SEVERITIES = ("P0", "P1", "P2", "P3")
+_HEX64_RE = re.compile(r"^[0-9a-fA-F]{64}$")
+
+
+def render_package_payload(entries) -> bytes:
+    """The one deterministic audit payload renderer, shared by build and
+    verify: framing marker plus exact input bytes in declared order, so
+    verification can require byte equality with no trailing or unlisted
+    bytes."""
+    chunks = []
+    for role, rel, data in entries:
+        marker = (f">>>FILE role={json.dumps(role)} "
+                  f"path={json.dumps(rel)} sha256={sha256_hex(data)} "
+                  f"bytes={len(data)}\n")
+        chunks.append(marker.encode("utf-8"))
+        chunks.append(data)
+    return b"".join(chunks)
 
 
 def audit_dir(project: Path, task_id: str, iteration: int) -> Path:
@@ -54,7 +71,7 @@ def build_package(project: Path, task: dict, iteration: int,
     envelope_path, envelope = loaded
     collected = []
     for role, rels in roles.items():
-        if role not in ("input", "instruction", "validation"):
+        if role not in INPUT_ROLES:
             raise UALError("AUDIT_ROLE_INVALID", role)
         for rel in rels:
             collected.append((role, rel))
@@ -88,14 +105,8 @@ def build_package(project: Path, task: dict, iteration: int,
     validated.sort(key=lambda item: item[1])
     directory.mkdir(parents=True, exist_ok=False)
     try:
-        chunks = []
-        for role, rel, data in validated:
-            marker = (f">>>FILE role={json.dumps(role)} "
-                      f"path={json.dumps(rel)} sha256={sha256_hex(data)} "
-                      f"bytes={len(data)}\n")
-            chunks.append(marker.encode("utf-8"))
-            chunks.append(data)
-        payload = b"".join(chunks)
+        payload = render_package_payload(
+            [(role, rel, data) for role, rel, data in validated])
         (directory / PAYLOAD_NAME).write_bytes(payload)
         manifest = {
             "schema": PACKAGE_SCHEMA,
@@ -125,6 +136,12 @@ def build_package(project: Path, task: dict, iteration: int,
 
 
 def verify_package(project: Path, task_id: str, package_rel: str) -> dict:
+    """Full package verification: manifest identity (exact task and
+    iteration), unique complete declared input set, per-input live byte
+    counts and hashes, totals, outer payload identity, and a byte-exact
+    re-render of the payload from the manifest-bound live inputs — so
+    synchronized inner-content plus outer-hash tampering refuses and
+    every declared embedded input is proven, not merely searched for."""
     directory = resolve_inside(project, package_rel, label="AUDIT_PACKAGE")
     if not directory.is_dir():
         raise UALError("AUDIT_PACKAGE_MISSING", package_rel)
@@ -137,18 +154,74 @@ def verify_package(project: Path, task_id: str, package_rel: str) -> dict:
     if not isinstance(manifest, dict) or manifest.get("schema") != \
             PACKAGE_SCHEMA:
         raise UALError("AUDIT_MANIFEST_SCHEMA", package_rel)
-    if manifest.get("payload", {}).get("sha256") != sha256_hex(payload):
+    if manifest.get("task") != task_id:
+        raise UALError("AUDIT_PACKAGE_TASK_MISMATCH",
+                       f"{manifest.get('task')!r}!={task_id!r}")
+    name = directory.name
+    if not name.startswith("iteration_") or \
+            not name[len("iteration_"):].isdigit():
+        raise UALError("AUDIT_PACKAGE_ITERATION_MISMATCH", name)
+    if manifest.get("iteration") != int(name[len("iteration_"):]):
+        raise UALError("AUDIT_PACKAGE_ITERATION_MISMATCH",
+                       f"{manifest.get('iteration')!r} vs {name}")
+    for field in ("envelope_sha256", "candidate_sha256"):
+        value = manifest.get(field)
+        if not isinstance(value, str) or not _HEX64_RE.match(value):
+            raise UALError("AUDIT_MANIFEST_SCHEMA", field)
+    declared = manifest.get("inputs")
+    if not isinstance(declared, list) or not declared:
+        raise UALError("AUDIT_MANIFEST_SCHEMA", "inputs")
+    if len(declared) > MAX_INPUTS:
+        raise UALError("AUDIT_INPUT_COUNT_CAP", str(len(declared)))
+    seen = set()
+    total = 0
+    entries = []
+    for entry in declared:
+        if not isinstance(entry, dict) or \
+                not isinstance(entry.get("path"), str) or \
+                not isinstance(entry.get("role"), str) or \
+                not isinstance(entry.get("bytes"), int) or \
+                isinstance(entry.get("bytes"), bool) or \
+                not isinstance(entry.get("sha256"), str) or \
+                not _HEX64_RE.match(entry["sha256"]):
+            raise UALError("AUDIT_MANIFEST_SCHEMA", "input entry")
+        rel = entry["path"]
+        if entry["role"] not in INPUT_ROLES:
+            raise UALError("AUDIT_ROLE_INVALID", entry["role"])
+        if rel in seen:
+            raise UALError("AUDIT_INPUT_DUPLICATE", rel)
+        seen.add(rel)
+        live_path = resolve_inside(project, rel, label="AUDIT_INPUT")
+        if not live_path.is_file():
+            raise UALError("AUDIT_INPUT_DRIFT", rel)
+        data = live_path.read_bytes()
+        if entry["sha256"] != sha256_hex(data) or \
+                entry["bytes"] != len(data):
+            raise UALError("AUDIT_INPUT_DRIFT", rel)
+        total += len(data)
+        if total > MAX_TOTAL_BYTES:
+            raise UALError("AUDIT_TOTAL_BYTES_CAP", str(total))
+        entries.append((entry["role"], rel, data))
+    declared_paths = [entry["path"] for entry in declared]
+    if declared_paths != sorted(declared_paths):
+        raise UALError("AUDIT_INPUT_ORDER_INVALID",
+                       "manifest inputs must use canonical path order")
+    if manifest.get("input_count") != len(declared):
+        raise UALError("AUDIT_TOTALS_MISMATCH",
+                       f"input_count {manifest.get('input_count')!r} "
+                       f"!={len(declared)}")
+    if manifest.get("total_bytes") != total:
+        raise UALError("AUDIT_TOTALS_MISMATCH",
+                       f"total_bytes {manifest.get('total_bytes')!r} "
+                       f"!={total}")
+    payload_binding = manifest.get("payload") or {}
+    if payload_binding.get("sha256") != sha256_hex(payload) or \
+            payload_binding.get("bytes") != len(payload):
         raise UALError("AUDIT_PAYLOAD_IDENTITY_MISMATCH", package_rel)
-    if manifest.get("payload", {}).get("bytes") != len(payload):
-        raise UALError("AUDIT_PAYLOAD_IDENTITY_MISMATCH", package_rel)
-    for entry in manifest.get("inputs") or []:
-        marker = (f">>>FILE role={json.dumps(entry.get('role'))} "
-                  f"path={json.dumps(entry.get('path'))} "
-                  f"sha256={entry.get('sha256')} "
-                  f"bytes={entry.get('bytes')}\n").encode("utf-8")
-        if marker not in payload:
-            raise UALError("AUDIT_PAYLOAD_MARKER_MISSING",
-                           str(entry.get("path")))
+    if render_package_payload(entries) != payload:
+        raise UALError("AUDIT_PAYLOAD_CONTENT_MISMATCH",
+                       "payload bytes differ from the re-rendered "
+                       "manifest-bound inputs")
     return {"ok": True, "package": package_rel,
             "manifest_sha256": sha256_hex(manifest_path.read_bytes()),
             "payload_sha256": sha256_hex(payload),

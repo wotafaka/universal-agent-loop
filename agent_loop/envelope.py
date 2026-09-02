@@ -238,6 +238,56 @@ def _receipt_digests(project: Path, task_id: str) -> list:
     return digests
 
 
+def _live_member_records(project: Path, task: dict, errors: list) -> list:
+    """The exact expected candidate member records, derived from the
+    live task contract in freeze order: allowlist members followed by
+    the report."""
+    records = []
+    for rel in allowlist(task):
+        try:
+            member_path = resolve_inside(project, rel, label="MEMBER")
+        except UALError:
+            errors.append(f"CANDIDATE_MEMBER_ESCAPE:{rel}")
+            continue
+        if not member_path.is_file():
+            errors.append(f"CANDIDATE_MEMBER_MISSING:{rel}")
+            continue
+        data = member_path.read_bytes()
+        records.append({"path": rel, "bytes": len(data),
+                        "sha256": sha256_hex(data)})
+    report_rel_path = report_rel(task)
+    try:
+        report_path = resolve_inside(project, report_rel_path,
+                                     label="REPORT")
+    except UALError:
+        errors.append(f"CANDIDATE_MEMBER_ESCAPE:{report_rel_path}")
+        return records
+    if not report_path.is_file():
+        errors.append(f"CANDIDATE_MEMBER_MISSING:{report_rel_path}")
+        return records
+    data = report_path.read_bytes()
+    records.append({"path": report_rel_path, "bytes": len(data),
+                    "sha256": sha256_hex(data)})
+    return records
+
+
+def _live_skill_records(project: Path, task: dict, errors: list) -> list:
+    records = []
+    for rel in task.get("required_skills") or []:
+        try:
+            skill_path = resolve_inside(project, rel, label="SKILL")
+        except UALError:
+            errors.append(f"CANDIDATE_SKILL_MISSING:{rel}")
+            continue
+        if not skill_path.is_file():
+            errors.append(f"CANDIDATE_SKILL_MISSING:{rel}")
+            continue
+        data = skill_path.read_bytes()
+        records.append({"path": rel, "bytes": len(data),
+                        "sha256": sha256_hex(data)})
+    return records
+
+
 def verify_envelope(project: Path, task: dict) -> dict:
     task_id = task["id"]
     loaded = latest_envelope(project, task_id)
@@ -251,26 +301,40 @@ def verify_envelope(project: Path, task: dict) -> dict:
     bound_task = envelope.get("task_file") or {}
     if bound_task.get("sha256") != sha256_hex(task_path.read_bytes()):
         errors.append("TASK_CONTRACT_DRIFT")
-    for member in envelope.get("members") or []:
-        rel = member.get("path")
-        try:
-            member_path = resolve_inside(project, rel, label="MEMBER")
-        except UALError:
-            errors.append(f"CANDIDATE_MEMBER_ESCAPE:{rel}")
-            continue
-        if not member_path.is_file():
-            errors.append(f"CANDIDATE_MEMBER_DRIFT:{rel}")
-            continue
-        data = member_path.read_bytes()
-        if member.get("sha256") != sha256_hex(data) or \
-                member.get("bytes") != len(data):
-            errors.append(f"CANDIDATE_MEMBER_DRIFT:{rel}")
-    for skill in envelope.get("skills") or []:
-        rel = skill.get("path")
-        skill_path = Path(project) / rel
-        if not skill_path.is_file() or \
-                skill.get("sha256") != sha256_hex(skill_path.read_bytes()):
-            errors.append(f"CANDIDATE_SKILL_DRIFT:{rel}")
+    from .hashing import member_digest
+    expected_members = _live_member_records(project, task, errors)
+    recorded_members = envelope.get("members")
+    if not isinstance(recorded_members, list) or \
+            [m.get("path") for m in recorded_members] != \
+            [m["path"] for m in expected_members]:
+        errors.append(
+            "CANDIDATE_MEMBER_SET_DRIFT:envelope declares "
+            f"{len(recorded_members or [])} members; the live task "
+            f"contract requires {len(expected_members)} in fixed order")
+    else:
+        for recorded, live in zip(recorded_members, expected_members):
+            if recorded.get("bytes") != live["bytes"] or \
+                    recorded.get("sha256") != live["sha256"]:
+                errors.append(f"CANDIDATE_MEMBER_DRIFT:{live['path']}")
+    expected_skills = _live_skill_records(project, task, errors)
+    recorded_skills = envelope.get("skills")
+    if not isinstance(recorded_skills, list) or \
+            [s.get("path") for s in recorded_skills] != \
+            [s["path"] for s in expected_skills]:
+        errors.append(
+            "CANDIDATE_SKILL_SET_DRIFT:envelope declares "
+            f"{len(recorded_skills or [])} skills; the live task "
+            f"contract requires {len(expected_skills)} in fixed order")
+    else:
+        for recorded, live in zip(recorded_skills, expected_skills):
+            if recorded.get("bytes") != live["bytes"] or \
+                    recorded.get("sha256") != live["sha256"]:
+                errors.append(f"CANDIDATE_SKILL_DRIFT:{live['path']}")
+    recomputed_candidate = member_digest(
+        [(m["path"], m["sha256"]) for m in expected_members]) or ""
+    if envelope.get("candidate_sha256") != recomputed_candidate:
+        errors.append("CANDIDATE_DIGEST_FORGERY:candidate_sha256 does "
+                      "not match the recomputed canonical member digest")
     ledger = validation.Ledger(project, task)
     if envelope.get("close_chain", {}).get("ledger_sha256") != \
             sha256_hex(ledger.path.read_bytes()):

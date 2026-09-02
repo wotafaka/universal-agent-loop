@@ -35,22 +35,10 @@ def mandatory_closure(project: Path, task: dict) -> list:
     return members
 
 
-def build_pack(project: Path, task: dict) -> dict:
-    task_id = task["id"]
-    directory = task_dir(project, task_id)
-    pack_path = directory / "context_pack.md"
-    index_path = directory / "context_pack_index.json"
-    if pack_path.is_file():
-        _require_compaction_safety(project, task_id)
-    closure = mandatory_closure(project, task)
-    index_members = []
-    for rel, role in closure:
-        path = project / rel
-        if not path.is_file():
-            if role in ("task", "skill"):
-                raise UALError("CONTEXT_SKILL_MISSING", rel)
-            continue
-        index_members.append({"path": rel, "role": role})
+def _render_context_pack(task_id: str, members: list,
+                         bodies: dict) -> bytes:
+    """The one deterministic context-pack renderer, shared by build and
+    verify so re-rendered expected bytes are comparable byte-for-byte."""
     lines = [
         f"# Context pack — {task_id}",
         "",
@@ -61,26 +49,45 @@ def build_pack(project: Path, task: dict) -> dict:
         "",
     ]
     task_entry = None
+    for member in members:
+        if member["role"] == "task":
+            task_entry = member
+            continue
+        body = bodies[member["path"]].rstrip("\n")
+        lines += [f"## {member['role']}: {member['path']}", "", "```",
+                  body, "```", ""]
+    if task_entry:
+        body = bodies[task_entry["path"]].rstrip("\n")
+        lines += [f"## Task (delta suffix): {task_entry['path']}", "",
+                  "```json", body, "```", ""]
+    for member in members:
+        lines.append(f"- `{member['path']}` ({member['role']}): sha256 "
+                     f"`{member['sha256']}`, bytes {member['bytes']}")
+    return ("\n".join(lines) + "\n").encode("utf-8")
+
+
+def build_pack(project: Path, task: dict) -> dict:
+    task_id = task["id"]
+    directory = task_dir(project, task_id)
+    pack_path = directory / "context_pack.md"
+    index_path = directory / "context_pack_index.json"
+    if pack_path.is_file():
+        _require_compaction_safety(project, task_id)
+    closure = mandatory_closure(project, task)
+    index_members = []
+    bodies = {}
     for rel, role in closure:
         path = project / rel
         if not path.is_file():
+            if role in ("task", "skill"):
+                raise UALError("CONTEXT_SKILL_MISSING", rel)
             continue
-        body = path.read_text(encoding="utf-8").rstrip("\n")
-        if role == "task":
-            task_entry = (rel, body)
-            continue
-        lines += [f"## {role}: {rel}", "", "```", body, "```", ""]
-    if task_entry:
-        rel, body = task_entry
-        lines += [f"## Task (delta suffix): {rel}", "", "```json",
-                  body, "```", ""]
-    for member in index_members:
-        data = (project / member["path"]).read_bytes()
-        member["bytes"] = len(data)
-        member["sha256"] = sha256_hex(data)
-        lines.append(f"- `{member['path']}` ({member['role']}): sha256 "
-                     f"`{member['sha256']}`, bytes {len(data)}")
-    pack_bytes = ("\n".join(lines) + "\n").encode("utf-8")
+        data = path.read_bytes()
+        bodies[rel] = data.decode("utf-8")
+        index_members.append({"path": rel, "role": role,
+                              "bytes": len(data),
+                              "sha256": sha256_hex(data)})
+    pack_bytes = _render_context_pack(task_id, index_members, bodies)
     if pack_path.is_file():
         atomic_write_bytes(pack_path, pack_bytes, max_bytes=PACK_MAX_BYTES)
     else:
@@ -204,20 +211,49 @@ def verify_pack(project: Path, task: dict, pack_rel: str) -> dict:
     if not index_path.is_file():
         raise UALError("CONTEXT_INDEX_MISSING", str(index_path))
     index = load_json(index_path, max_bytes=INDEX_MAX_BYTES)
+    if not isinstance(index, dict) or \
+            index.get("schema") != "ual-context-index/1":
+        raise UALError("CONTEXT_INDEX_MISSING", str(index_path))
+    if index.get("task") != task["id"]:
+        raise UALError("CONTEXT_INDEX_TASK_MISMATCH",
+                       f"{index.get('task')!r}!={task['id']!r}")
     pack_bytes = pack_path.read_bytes()
     if index.get("payload_sha256") != sha256_hex(pack_bytes):
         raise UALError("CONTEXT_PAYLOAD_DRIFT", pack_rel)
     start = time.perf_counter()
     errors = []
-    for member in index.get("members") or []:
-        path = project / member["path"]
-        if not path.is_file():
-            errors.append(f"CONTEXT_INDEX_DRIFT:{member['path']}")
+    expected = []
+    for rel, role in mandatory_closure(project, task):
+        if not (project / rel).is_file():
+            if role in ("task", "skill"):
+                errors.append(f"CONTEXT_INDEX_DRIFT:{rel}")
             continue
+        expected.append((rel, role))
+    members = index.get("members")
+    if not isinstance(members, list) or \
+            [(m.get("path"), m.get("role")) for m in members] != expected:
+        raise UALError(
+            "CONTEXT_INDEX_SET_DRIFT",
+            "index members do not match the live task closure")
+    render_ok = True
+    bodies = {}
+    for member in members:
+        path = project / member["path"]
         data = path.read_bytes()
         if member.get("sha256") != sha256_hex(data) or \
                 member.get("bytes") != len(data):
             errors.append(f"CONTEXT_INDEX_DRIFT:{member['path']}")
+            render_ok = False
+            continue
+        try:
+            bodies[member["path"]] = data.decode("utf-8")
+        except UnicodeDecodeError:
+            errors.append(f"CONTEXT_INDEX_DRIFT:{member['path']}")
+            render_ok = False
+    if render_ok and \
+            _render_context_pack(task["id"], members, bodies) != pack_bytes:
+        errors.append("CONTEXT_PAYLOAD_CONTENT_MISMATCH:pack bytes differ "
+                      "from the re-rendered index-bound content")
     restoration = time.perf_counter() - start
     if errors:
         raise UALError("CONTEXT_VERIFY_REFUSED", ";".join(errors[:4]))

@@ -195,6 +195,31 @@ reproduced the issue. Acceptance now re-derives current policy and revalidates t
 audit package, result bytes, route identity and any quota chain before writing an
 acceptance record. These changed bytes again require a fresh exact-package audit.
 
+Continuation 8 (2026-09-03, this working copy) repaired the three release-check-9
+integrity findings. Release-check-9 had passed 232 tests and all six Windows/Ubuntu/
+macOS CI jobs, but the exact-package Sol fallback audit returned FIX_REQUIRED; Opus 5
+had been attempted first on the same package and returned an observed-model terminal
+HTTP 429. The portability changes themselves passed audit. Repairs, each with focused
+RED→GREEN regressions on the real CLI path: (1) `run --stdin-file`/`--basis-file` now
+resolve through the containment primitive as regular non-link files under documented
+caps (stdin 8 MiB, basis 1 MiB) before any claim/run exists, and ENGINEER stdin must
+be a digest-verified task-authorized pack (context pack or manifest-bound repair pack)
+passing the conservative secret scan; (2) envelope verification derives the exact
+expected member/skill sets from the live task contract and recomputes the aggregate
+candidate digest, so removal, addition, duplication, byte-count forgery and
+candidate-digest forgery refuse before review seal or acceptance; (3) audit package,
+repair pack and context pack verifiers re-render expected bytes from manifest-bound
+live inputs and require byte equality (exact task/iteration, unique complete ordered
+member sets, fixed audit-input roles, per-member bytes/hashes, totals, framing, no
+unlisted bytes), with
+synchronized inner-content + outer-hash tamper regressions for all three package
+types. Parent review then reproduced and repaired two adjacent synchronized-tamper
+cases: reordered audit inputs and an invented audit role. Observed locally on Windows/
+CPython 3.14: focused file 117 tests OK,
+full suite 262 tests OK (3 honest symlink skips), reference smoke PASS, offline
+quickstart PASS. The changed bytes require a new exact-package independent audit;
+no earlier PASS transfers.
+
 The release manifest lists distribution paths, stored bytes and SHA-256. Bounded
 patterns cannot certify absence of all secrets. Raw development logs and independent
 messages remain outside the package; this summary is not a signed transcript. Validate

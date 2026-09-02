@@ -29,7 +29,9 @@ the write-once pack LAST. Pack includes complete task and skills, exact fixes, s
 positions, validation budget and canonical-document manifest. No state refresh between
 building and engineer verification: that would invalidate the pack's own hashes.
 
-Engineer verifies first, before edits. A verified pack replaces repeated historical
+Engineer verifies first, before edits. Verification re-renders the pack bytes from the
+manifest-bound live inputs and requires byte equality, so a synchronized manifest+pack
+edit cannot pass as verified. A verified pack replaces repeated historical
 reading, not safety obligations. On mismatch use full canonical startup and re-establish
 current authority; never work from a failed pack. Closeout bookkeeping resumes only at
 the declared end. Do not call a legacy startup command first when it itself refreshes
