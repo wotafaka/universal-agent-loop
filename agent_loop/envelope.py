@@ -369,6 +369,26 @@ def verify_envelope(project: Path, task: dict) -> dict:
         if not closure_path.is_file() or bound.get("sha256") != \
                 sha256_hex(closure_path.read_bytes()):
             errors.append("CAPTURE_CLOSURE_DRIFT:" + str(bound.get("path")))
+    try:
+        expected_logs = _bind_validation_logs(project, task, ledger)
+        expected_closure = _bind_capture_closure(project, task)
+    except UALError as exc:
+        errors.append("VALIDATION_EVIDENCE_UNVERIFIABLE:" + str(exc))
+    else:
+        recorded_logs = envelope.get("validation_logs")
+        if recorded_logs != expected_logs:
+            errors.append(
+                "VALIDATION_LOG_SET_DRIFT:envelope declares "
+                f"{len(recorded_logs or [])} validation-log records; the "
+                f"live ledger and run sidecars require "
+                f"{len(expected_logs)} in fixed order")
+        recorded_closure = envelope.get("capture_closure")
+        if recorded_closure != expected_closure:
+            errors.append(
+                "CAPTURE_CLOSURE_SET_DRIFT:envelope declares "
+                f"{len(recorded_closure or [])} capture-closure records; "
+                f"the live declared validation commands require "
+                f"{len(expected_closure)} in fixed order")
     attempt_binding = envelope.get("attempt") or {}
     if attempt_binding:
         attempt_json = attempt_dir_path / "attempt.json"

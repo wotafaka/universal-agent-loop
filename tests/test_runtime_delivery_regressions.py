@@ -3146,5 +3146,73 @@ class C9_BoundedTransmissionRead(unittest.TestCase):
             shutil.rmtree(project, ignore_errors=True)
 
 
+class C10_ExactEvidenceClosure(SpineFixture):
+    """CONTINUATION 10: verify_envelope independently re-derives the exact
+    ordered validation-log and capture-closure sets from the live ledger,
+    run sidecars and declared validation commands, exactly as freeze binds
+    them; a synchronously shortened, reordered or deformed envelope cannot
+    pass verification, review seal, required-audit build or acceptance."""
+
+    def setUp(self):
+        self._build("c10-envelope", with_engineer=False)
+
+    def _envelope_path(self):
+        envelope_dir = (self.project / ".agent-loop" / "tasks" /
+                        "demo-task" / "attempts" / "attempt_00000001" /
+                        "envelope")
+        return sorted(envelope_dir.glob("envelope_*.json"))[-1]
+
+    def _load(self):
+        return json.loads(self._envelope_path().read_text("utf-8"))
+
+    def test_legitimate_envelope_still_verifies_with_real_evidence(self):
+        proc, payload = h.run_cli(self.project, "envelope", "verify",
+                                  "--task", "demo-task")
+        self.assertTrue(payload["ok"])
+        envelope = self._load()
+        self.assertTrue(envelope["validation_logs"],
+                        "fixture must have real counted validation logs")
+        self.assertTrue(envelope["capture_closure"],
+                        "fixture must have a real capture closure")
+
+    def test_removed_validation_log_entry_refuses_verify_and_seal(self):
+        envelope = self._load()
+        envelope["validation_logs"] = envelope["validation_logs"][:-1]
+        _envelope_json_write(self._envelope_path(), envelope)
+        h.expect_refusal(self.project, "envelope", "verify", "--task",
+                          "demo-task", code="VALIDATION_LOG_SET_DRIFT")
+        review_text(self.project)
+        h.expect_refusal(self.project, "review", "seal", "--task",
+                          "demo-task", "--review", "review.md",
+                          "--verdict", "PASS",
+                          "--reviewer-session", "sess-reviewer",
+                          code="VALIDATION_LOG_SET_DRIFT")
+
+    def test_removed_capture_closure_entry_refuses_verify(self):
+        envelope = self._load()
+        envelope["capture_closure"] = envelope["capture_closure"][:-1]
+        _envelope_json_write(self._envelope_path(), envelope)
+        h.expect_refusal(self.project, "envelope", "verify", "--task",
+                          "demo-task", code="CAPTURE_CLOSURE_SET_DRIFT")
+
+    def test_reordered_validation_logs_refuse_verify(self):
+        envelope = self._load()
+        envelope["validation_logs"] = list(
+            reversed(envelope["validation_logs"]))
+        _envelope_json_write(self._envelope_path(), envelope)
+        h.expect_refusal(self.project, "envelope", "verify", "--task",
+                          "demo-task", code="VALIDATION_LOG_SET_DRIFT")
+
+    def test_deformed_capture_closure_record_refuses_verify(self):
+        envelope = self._load()
+        deformed = dict(envelope["capture_closure"][0])
+        deformed.pop("sha256")
+        envelope["capture_closure"] = [deformed] + \
+            envelope["capture_closure"][1:]
+        _envelope_json_write(self._envelope_path(), envelope)
+        h.expect_refusal(self.project, "envelope", "verify", "--task",
+                          "demo-task", code="CAPTURE_CLOSURE_SET_DRIFT")
+
+
 if __name__ == "__main__":
     unittest.main()

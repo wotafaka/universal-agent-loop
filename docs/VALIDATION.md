@@ -251,6 +251,33 @@ full suite 278 tests OK (3 honest skips), reference smoke PASS, offline
 quickstart PASS. The changed bytes require a new exact-package independent audit;
 no earlier PASS transfers.
 
+Continuation 10 (2026-09-03, this working copy) repaired the exact
+release-check-12 validation-evidence closure defect returned by the
+machine-observed `claude-opus-5` audit (verdict FIX_REQUIRED, one material
+finding): `envelope.verify_envelope()` verified only the `validation_logs` and
+`capture_closure` entries already declared by the envelope, so an envelope and
+its required-audit package could be synchronously shortened by removing one
+frozen validation-evidence entry — the closure then derived the same shortened
+set and build/verify/record/acceptance all passed. Verified RED first: removing
+one counted `validation_logs` entry or the single `capture_closure` entry from
+a real frozen envelope left `envelope verify` at exit 0, and reordering the
+log list also verified. The repair reuses the existing freeze-time binders:
+`verify_envelope` now independently re-derives the exact ordered
+validation-log and capture-closure record sets from the live canonical task,
+ledger, run sidecars and declared validation commands, requires exact record
+equality (missing, extra, duplicate, reordered and relabelled/deformed entries
+refuse with `VALIDATION_LOG_SET_DRIFT` / `CAPTURE_CLOSURE_SET_DRIFT`), keeps
+the pre-existing per-entry byte/hash checks, and fails closed with
+`VALIDATION_EVIDENCE_UNVERIFIABLE` when live re-derivation itself is
+impossible. No new evidence is created and no caller declaration is trusted;
+because audit build/verify, review seal and acceptance all call
+`verify_envelope`, the refusal precedes each gate. Observed locally on Windows/
+CPython 3.14: focused file 138 tests OK (3 honest symlink skips) after the 4
+intended RED failures (plus the adjacent positive control that passed);
+full suite 283 tests OK (3 honest skips); reference smoke PASS; offline
+quickstart PASS. LOCAL_INTEGRITY unchanged; the changed bytes require a new
+exact-package independent audit; no earlier PASS transfers.
+
 The release manifest lists distribution paths, stored bytes and SHA-256. Bounded
 patterns cannot certify absence of all secrets. Raw development logs and independent
 messages remain outside the package; this summary is not a signed transcript. Validate
