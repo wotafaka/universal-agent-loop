@@ -2,13 +2,16 @@
 
 A PID alone is reusable and never proves identity. Windows uses
 ``GetProcessTimes`` creation time through ctypes; Linux uses procfs
-``starttime`` plus the boot time. Any other platform, or an
+``starttime`` plus the boot time; macOS uses the process start time from
+``ps`` under a fixed locale. Any other platform, or an
 unobtainable probe, returns ``None`` and the caller must fail closed
 instead of guessing.
 """
 from __future__ import annotations
 
 import os
+import subprocess
+import sys
 from pathlib import Path
 
 
@@ -17,6 +20,8 @@ def process_start_identity(pid: int) -> dict | None:
         return None
     if os.name == "nt":
         return _windows_identity(pid)
+    if sys.platform == "darwin":
+        return _darwin_identity(pid)
     if Path("/proc/self/stat").exists():
         return _procfs_identity(pid)
     return None
@@ -27,7 +32,35 @@ def process_alive(pid: int) -> bool:
         return False
     if os.name == "nt":
         return _windows_alive(pid)
+    if sys.platform == "darwin":
+        return _posix_alive(pid)
     return Path(f"/proc/{pid}").exists()
+
+
+def _darwin_identity(pid: int) -> dict | None:
+    try:
+        result = subprocess.run(
+            ["/bin/ps", "-o", "lstart=", "-p", str(pid)],
+            capture_output=True, text=True, timeout=2,
+            env={"LC_ALL": "C", "PATH": "/usr/bin:/bin"})
+    except (OSError, subprocess.SubprocessError):
+        return None
+    value = " ".join(result.stdout.split())
+    if result.returncode != 0 or not value:
+        return None
+    return {"method": "darwin-ps-lstart", "value": value}
+
+
+def _posix_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+    return True
 
 
 def _windows_identity(pid: int) -> dict | None:

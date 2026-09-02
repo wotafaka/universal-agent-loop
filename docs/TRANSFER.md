@@ -56,7 +56,7 @@ Source abbreviations:
 | ID | Source feature / anchor | Destination | Starter disposition | Runtime binding (module · CLI · tests) |
 |---|---|---|---|---|
 | X01 | Pre-spawn claim, L | RUNTIME | PORT; refuse duplicate before child | Checkout-scope `claims.acquire` before any child; refusal leaves no run dir · CLI `claim acquire`, `run --purpose ENGINEER` · test_claims_and_runner |
-| X02 | Host/PID/process birth identity, L | RUNTIME | PORT; PID reuse and ambiguous claim tests | `prockid.process_start_identity` (Win GetProcessTimes / procfs) bound into claims · CLI `claim bind-child/release` · test_claims_and_runner |
+| X02 | Host/PID/process birth identity, L | RUNTIME | PORT; PID reuse and ambiguous claim tests | `prockid.process_start_identity` (Win GetProcessTimes / Linux procfs / macOS `ps lstart`) bound into claims · CLI `claim bind-child/release` · test_claims_and_runner |
 | X03 | Terminal release/owner adjudication, L/M | RUNTIME | PORT; no automatic stale cleanup | `claims.release` (terminal proof + log identity), `claims.abandon` (owner reason); nothing auto-deletes · test_claims_and_runner |
 | X04 | Direct durable logs + atomic sidecar, L | RUNTIME | PORT; output integrity and bounded growth | `runner.run_child`: exclusive log, atomic ual-run/1 sidecar, declared byte cap, overflow flag · test_claims_and_runner |
 | X05 | Session ID retained after tool yield, B15 | RUNTIME, LESSONS | GUIDE; never launch twice from lost UI state | `run --session-id` stored in sidecar and continuation record · `continuation.prepare` · test_progress_pack_continuation |
