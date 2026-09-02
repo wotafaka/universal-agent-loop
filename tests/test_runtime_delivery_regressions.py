@@ -1990,7 +1990,9 @@ class REL_ReleaseBuilder(unittest.TestCase):
                              "--out-zip", "u.zip", "--out-manifest", "m.json",
                              code="RELEASE_MEMBER_REFUSED")
         finally:
-            if link.exists():
+            if link.is_symlink():
+                link.unlink()
+            elif link.exists():
                 os.rmdir(link)
             shutil.rmtree(project, ignore_errors=True)
 
