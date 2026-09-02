@@ -1,0 +1,31 @@
+# Parent-preserved summary of independent Sol review
+
+Reviewer: /root/lineclean_memory_review, native sol_reviewer, fresh context.
+Verdict: FIX_REQUIRED — documentation only; no utility defect found.
+Original detailed verdict remains in the parent/subagent transcript.
+
+Reviewer independently recomputed 102 candidate and 7 evidence members, no drift or
+unlisted candidate files. Freeze SHA256
+4f157ebb2377d5aefbaa2b335fed3e913e626a3465d4ea5c96fb768739019478.
+Protected files, original AGENTS prefix, 47 bundle members, 44 installed copies match.
+
+Contract: R1/R2/R3/R4 supported; R5 remaining. LC-01: TASK:123, STATE:20 and
+IMPLEMENTATION_REPORT:67 incorrectly claim unchanged implementation over RED->GREEN.
+Raw events82/89/93/97/101/104 prove stub -> intended RED -> implementation ->
+two wrong test-oracle failures -> oracle correction -> final GREEN. Only between
+the post-implementation runs was application behavior unchanged. Required repair:
+correct all three documents, retain code/tests/raw evidence, refreeze/review delta.
+
+Adversarial pass: inspected actual code and parent verifier expectations, strict bytes,
+input-preservation and inventory checks. No material utility defect. Parent ran the
+tests; reviewer did not represent them as reviewer-executed tests.
+
+Nonblocking debt: CLI test named idempotence actually repeats original input; function
+fixed-point test is genuine. Exact-one-GREEN budget contradicts two disclosed runs;
+freeze ordinal mislabeled; debugging read excluded despite unexpected oracle failures.
+Reconcile truthfully; no new code repair/test cycle justified.
+
+Skills: complete engineer reads verified in raw lines30/32/35/36/39/40. Reviewer applied
+workflow/evidence integrity, focused engineering, Ponytail/full, TDD raw ordering,
+invariant testing, capture-integrity byte boundaries and systematic debugging.
+Convergence: exact R1-R5 covered, remaining R5, NOT_CONVERGED. No owner acceptance.

@@ -1,0 +1,26 @@
+Command: python -I -S -B -m unittest discover -s tests -v
+Cwd: <PILOT_ROOT>
+Exit: 0
+test_cli_output_is_idempotent (test_lineclean.CliTests.test_cli_output_is_idempotent) ... ok
+test_file_argument_success (test_lineclean.CliTests.test_file_argument_success) ... ok
+test_invalid_utf8_exit2_no_partial_stdout (test_lineclean.CliTests.test_invalid_utf8_exit2_no_partial_stdout) ... ok
+test_missing_file_exit2_concise_stderr_no_stdout (test_lineclean.CliTests.test_missing_file_exit2_concise_stderr_no_stdout) ... ok
+test_stdin_when_argument_omitted (test_lineclean.CliTests.test_stdin_when_argument_omitted) ... ok
+test_second_application_is_fixed_point (test_lineclean.IdempotencePropertyTests.test_second_application_is_fixed_point) ... ok
+test_case_sensitive_comparison (test_lineclean.UniqueLinesFunctionTests.test_case_sensitive_comparison) ... ok
+test_crlf_normalized_to_lf (test_lineclean.UniqueLinesFunctionTests.test_crlf_normalized_to_lf) ... ok
+test_duplicate_blank_lines_are_distinct_entries (test_lineclean.UniqueLinesFunctionTests.test_duplicate_blank_lines_are_distinct_entries) ... ok
+test_empty_input (test_lineclean.UniqueLinesFunctionTests.test_empty_input) ... ok
+test_first_occurrence_kept_in_original_order (test_lineclean.UniqueLinesFunctionTests.test_first_occurrence_kept_in_original_order) ... ok
+test_lone_cr_normalized_to_lf (test_lineclean.UniqueLinesFunctionTests.test_lone_cr_normalized_to_lf) ... ok
+test_one_trailing_lf_only_when_lines_remain (test_lineclean.UniqueLinesFunctionTests.test_one_trailing_lf_only_when_lines_remain) ... ok
+test_only_blank_lines (test_lineclean.UniqueLinesFunctionTests.test_only_blank_lines) ... ok
+test_trailing_lf_does_not_add_phantom_entry (test_lineclean.UniqueLinesFunctionTests.test_trailing_lf_does_not_add_phantom_entry) ... ok
+test_unicode_lines_preserved (test_lineclean.UniqueLinesFunctionTests.test_unicode_lines_preserved) ... ok
+test_whitespace_not_trimmed (test_lineclean.UniqueLinesFunctionTests.test_whitespace_not_trimmed) ... ok
+
+----------------------------------------------------------------------
+Ran 17 tests in 0.140s
+
+OK
+

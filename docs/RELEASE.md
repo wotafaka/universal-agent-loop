@@ -1,41 +1,56 @@
 # Release gates
 
-This release checklist covers the MIT-licensed starter after an owner-accepted pilot,
-not a completed runtime port. Do not upload the whole development folder blindly.
-Chosen name: universal-agent-loop. Attribution: Вадим Захаров. Root LICENSE is the current grant;
-the superseded private export status is explained in PROVENANCE without rewriting it.
+Current guidance: the runtime edition (`agent_loop/`) is executable and locally
+GREEN — focused suite, full suite, reference smoke and the offline quickstart all
+pass in this checkout. A prior byte-frozen candidate passed an independent Opus 5
+audit and a fresh nonweather Flash pilot; later security repairs changed the bytes,
+so that verdict does not transfer. Publication requires an exact-package audit,
+the owner release decision, observed remote CI, and downloaded-byte verification.
+Nothing below is acceptance, and none of those gates may be skipped to meet a date.
 
-Before publication:
+The public archive is built exclusively from the versioned allowlist
+`RELEASE_ALLOWLIST.txt` (schema `release-allowlist/1`) through the standard-library
+builder `agent_loop/release.py`:
 
-1. Preserve the chosen name, Вадим Захаров attribution and MIT license. Confirm the actual target
-   account and public/private visibility before publishing. The owner's subsequent MIT
-   grant resolves historical reference NONE/WITHHELD for this distribution; retain both
-   the original bytes and the explanation of the new grant in PROVENANCE.
-2. Audit the complete intended file allowlist, notices, example bindings and the remaining
-   provider-specific reference API. Decide whether historical reference ships separately
-   or a tested neutral API replaces it for public distribution. This starter includes
-   it as a labeled historical reference, not the default universal model router.
-3. Run the instructions on a real isolated nonweather pilot. A synthetic smoke is not
-   this integration test. Confirm skills are actually read and roles actually separated.
-   The Lineclean pilot satisfies this bounded gate for the earlier repaired starter on
-   Windows; see [VALIDATION](VALIDATION.md). It does not test every host or later runtime.
-4. If shipping automatic supervision, implement and test the adapter contract first.
-   Otherwise explicitly publish as an instruction/template starter, not turnkey runtime.
-   The owner selected starter-first. Remaining automation is tracked in TRANSFER;
-   do not drop PORT items or rename them complete to meet a release date.
-5. Run focused checks and independent review; freeze the reviewed files with hashes.
-6. Scan only the allowlisted release files for secrets, private paths and unwanted data.
-   Pattern scans are aids, not proof of complete sanitization; inspect results and examples.
-7. Create a fresh repository without private source history, only after explicit release
-   approval. Exclude .validation, local evidence, credentials, temporary files and caches.
-   Preserve reference bytes across Git line-ending conversion (.gitattributes).
-8. Verify the actual cloned/uploaded bytes and instructions. Export/commit/push alone
-   are not evidence that users can reproduce the workflow.
+```text
+python -m agent_loop --project . release build \
+  --release-root . --allowlist RELEASE_ALLOWLIST.txt \
+  --out-zip ual-archive.zip --out-manifest release-manifest.json
+python -m agent_loop --project . release verify \
+  --release-root . --allowlist RELEASE_ALLOWLIST.txt \
+  --archive ual-archive.zip --manifest release-manifest.json
+```
 
-A target-project installation and authorized development-provider runs occurred in the
-isolated pilot. No generic provider runtime was installed. Record the actual remote,
-commit and downloaded-byte check outside the frozen artifact when publication occurs;
-this checklist alone never proves that upload happened.
+The allowlist excludes `.source/`, `.validation/`, private engineering task/report
+files, caches, credentials, local profiles and the historical private
+`PACKAGED_FILES.json` input manifest. The builder refuses missing, duplicate,
+non-canonical, escaping or symlink members, scans every included byte sequence for
+a conservative documented secret-pattern set before writing anything, writes
+deterministic ZIP metadata/order, and emits an exact manifest (member bytes +
+SHA-256) that `release verify` re-checks against both the archive and the current
+sources. CI runs the full suite, the reference smoke and the offline quickstart
+from the extracted archive bytes on Windows, Ubuntu and macOS; a local run is not
+a claim that remote CI has run.
+
+Historical checklist (explicitly dated 2026-08-31, describing the earlier
+starter-only release preparation):
+
+- Preserve the chosen name, Вадим Захаров attribution and MIT license. The owner's
+  MIT grant resolves historical reference NONE/WITHHELD for this distribution;
+  retain both the original bytes and the explanation in PROVENANCE.
+- The reference ships as a labeled historical snapshot, not the default universal
+  model router.
+- The Lineclean pilot satisfied the bounded nonweather integration gate for the
+  earlier repaired starter on Windows; see [VALIDATION](VALIDATION.md). It does
+  not test every host, the new runtime, or any provider.
+- Pattern scans are aids, not proof of complete sanitization; inspect results.
+- Create a fresh repository without private source history, only after explicit
+  release approval. Preserve reference bytes across Git line-ending conversion
+  (.gitattributes).
+- Verify the actual cloned/uploaded bytes and instructions. Export/commit/push alone
+  are not evidence that users can reproduce the workflow.
+
 Manual owner acceptance and exact data-transmission scope remain the default for new
-adopters. New license/notices or other release edits require a fresh manifest and review
-of the actual delta; an earlier private ZIP is not automatically the licensed release.
+adopters. New license/notices or other release edits require a fresh allowlist, a
+rebuilt archive and manifest, and review of the actual delta; an earlier private ZIP
+is not automatically the licensed release.

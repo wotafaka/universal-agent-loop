@@ -17,8 +17,9 @@ The same model may serve all three roles. Context separation does not guarantee 
 reasoning or independent trust domains. If the host cannot create distinct contexts,
 use ordinary tests and explicitly report self-review; don't claim independent audit.
 
-This is an integration scenario, not a test execution log. The packaged executable demo
-is reference/smoke.py and uses synthetic lifecycle data, not this filename function.
+This is an integration scenario, not a test execution log. The packaged executable
+runtime demo is `examples/offline_quickstart.py`; `reference/smoke.py` separately
+checks the preserved historical contracts. Both use synthetic actors.
 
 ## Real nonweather pilot: Lineclean
 
@@ -50,7 +51,8 @@ Another defect was in the private launch path: a Windows batch wrapper delivered
 53 characters of a 3886-character repair task. The same native executable received the
 complete task body inside one added pair of quotes. Receiver-side evidence verified the
 body; a local regression now rejects that lossy multiline wrapper path before launch.
-That private helper is not a portable runtime included with this starter.
+That lossy private wrapper is not shipped. The portable runtime uses supervised stdin
+delivery plus receiver acknowledgement instead.
 
 One CLI test named idempotence actually checked repeatability. That limitation is
 disclosed; function idempotence was separately tested. Earlier network errors remain
@@ -65,8 +67,8 @@ Use [INTEGRATE](../prompts/INTEGRATE.md) with this addition:
 > actually read, use a separate engineer context and fresh read-only reviewer if my host
 > supports them. Have the reviewer recover the task from saved files before reading the
 > implementation. Preserve actual failed and passing evidence, fix material findings,
-> and ask me to accept the exact reviewed candidate. Do not claim this installs runtime
-> automation or proves token savings. If separate contexts are unavailable, report that
+> and ask me to accept the exact reviewed candidate. Do not claim this proves token
+> savings. If separate contexts are unavailable, report that
 > limitation instead of calling self-review independent.
 
 See [VALIDATION](../docs/VALIDATION.md) for evidence scope and historical package binding.

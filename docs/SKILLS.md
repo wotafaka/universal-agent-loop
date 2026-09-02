@@ -8,7 +8,8 @@ the skill's filename. Merge with stronger existing project skills; do not replac
 | Trigger | Portable skill |
 |---|---|
 | Begin/resume/handoff a governed implementation task | [loop-workflow](../skills/loop-workflow/SKILL.md) |
-| Software design, implementation, refactor or review | [focused-engineering](../skills/focused-engineering/SKILL.md) |
+| Software design, implementation, refactor or review | [focused-engineering](../skills/focused-engineering/SKILL.md) plus [karpathy-guidelines](../skills/karpathy-guidelines/SKILL.md) |
+| Coding, design, review or dependency choice (minimize dependencies) | [ponytail](../skills/ponytail/SKILL.md) |
 | New/changed executable behavior or bug fix | [test-driven-change](../skills/test-driven-change/SKILL.md) |
 | Reproduced failure or unexpected behavior | [systematic-debugging](../skills/systematic-debugging/SKILL.md) plus test-driven-change |
 | A genuine invariant, round-trip, determinism or independent oracle | [invariant-testing](../skills/invariant-testing/SKILL.md) |
@@ -20,6 +21,9 @@ the skill's filename. Merge with stronger existing project skills; do not replac
 These are standalone authored adaptations, not installations of Superpowers, Trail of
 Bits, Clean Code, ByteDance or an upstream plugin. [Origins](PROVENANCE.md) distinguishes
 conceptual influence from copied code. Do not claim a plugin is installed from a mention.
+`karpathy-guidelines` and `ponytail` are original concise adaptations of publicly argued
+engineering stances (attribution inside each body); they carry no external license text
+beyond this package's MIT grant and add no dependency.
 
 Research validation and real-money/credential operations require a project-specific
 domain pack. See [domain boundaries](DOMAIN-EXTENSIONS.md). Weather-specific rules are

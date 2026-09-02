@@ -1,0 +1,66 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Focused runtime suite
+        run: python -I -S -B -m unittest discover -s tests -v
+      - name: Reference smoke (synthetic evidence only)
+        run: python -I -S -B reference/smoke.py
+      - name: Offline quickstart (real CLI, synthetic actors)
+        run: python examples/offline_quickstart.py
+
+  publishable-archive:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Build the archive exclusively from the release allowlist
+        run: python -m agent_loop --project . release build --release-root .
+          --allowlist RELEASE_ALLOWLIST.txt
+          --out-zip ../ual-archive.zip
+          --out-manifest ../release-manifest.json
+      - name: Verify archive membership and hashes against the manifest
+        run: python -m agent_loop --project . release verify --release-root .
+          --allowlist RELEASE_ALLOWLIST.txt
+          --archive ../ual-archive.zip
+          --manifest ../release-manifest.json
+      - name: Extract the exact archive bytes
+        shell: python
+        run: |
+          import zipfile
+          with zipfile.ZipFile("../ual-archive.zip") as archive:
+              archive.extractall("../publish-check")
+          import shutil
+          shutil.copy("../release-manifest.json", "../publish-check/release-manifest.json")
+      - name: Full unittest suite from extracted archive bytes
+        working-directory: ../publish-check
+        run: python -I -S -B -m unittest discover -s tests -v
+      - name: Reference smoke from extracted archive bytes
+        working-directory: ../publish-check
+        run: python -I -S -B reference/smoke.py
+      - name: Offline quickstart from extracted archive bytes
+        working-directory: ../publish-check
+        run: python -I -S -B examples/offline_quickstart.py

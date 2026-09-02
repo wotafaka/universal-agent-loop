@@ -1,8 +1,26 @@
-# Instruction-only installation
+# Installation and integration
 
-Verify the original distribution against PACKAGED_FILES.json before copying. Preserve
-that original distribution and its manifest separately; adaptation changes bytes and
-does not remain validated by the original manifest. Do not overwrite an existing setup.
+The five-minute path does not modify your project:
+
+```text
+python examples/offline_quickstart.py
+```
+
+For real use, keep this repository or extracted release as a sidecar and point every
+runtime command at the target project explicitly:
+
+```text
+python -m agent_loop --project path/to/your-project task-validate --task task.json
+```
+
+The runtime stays in this checkout; its task state is written only under the explicit
+target's `.agent-loop/`. Provider CLIs and accounts are not installed or selected.
+
+## Instruction-only copy
+
+Verify the distribution ZIP against its release manifest before copying. Preserve that
+archive and manifest separately; adaptation changes bytes and is no longer validated by
+the original manifest. Do not overwrite an existing setup.
 
 Copy README.md, LICENSE and these complete directories under the target's .agent-loop/:
 docs/, skills/, templates/, examples/, prompts/, reference/, and validation/ plus tests/
@@ -47,6 +65,35 @@ adapter regression suite does not count as that real integration pilot. A startu
 only reads the small entrypoint/task/triggered skills is intentional; do not load every
 installed file into every session.
 
-This installs procedures and optional checks, not a launcher, process lock or automatic
-acceptance system. Native skill discovery, provider configuration and runtime integration
-remain host-specific steps with their own tests and permissions.
+This copy mode installs procedures and optional checks, not the Python runtime itself.
+Use the sidecar command above for executable claims, launch supervision, lifecycle,
+review and acceptance. Native skill discovery and provider configuration remain
+host-specific steps with their own tests and permissions.
+
+## Executable runtime quickstart
+
+Since the runtime edition, the package also ships `agent_loop/`, an executable
+standard-library CLI. Verify it works on your machine before any integration:
+
+```text
+python examples/offline_quickstart.py
+```
+
+It builds a synthetic nonweather demo project, drives the real CLI through
+preflight → RED → GREEN → close → freeze → synthetic review → acceptance →
+delivery report, and deletes its scratch project on exit. Synthetic actor labels
+(OWNER, reviewer) are fixtures, not a real owner decision or independent review.
+The runtime commands then operate on an explicit project root, for example:
+
+```text
+python -m agent_loop --project path/to/your-project task-validate --task task.json
+```
+
+Contract details and gate composition: [RUNTIME](RUNTIME.md). Everything remains
+LOCAL_INTEGRITY; manual owner acceptance stays the default.
+
+The public archive is built exclusively from `RELEASE_ALLOWLIST.txt` via
+`agent_loop release build/verify` (secret-pattern gate, exact manifest, hash
+verification); see [RELEASE](RELEASE.md). Portable named skills
+`karpathy-guidelines` and `ponytail` ship in `skills/` and are listed in the
+skills matrix; load them for software work.

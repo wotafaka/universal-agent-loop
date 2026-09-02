@@ -1,0 +1,11 @@
+{
+  "status": "PASS",
+  "installed_original_members": 44,
+  "function_cases": 7,
+  "cli_stdin_cases": 7,
+  "cli_failure_cases": 3,
+  "cli_file_case": "PASS",
+  "inputs_preserved": true,
+  "candidate_unchanged": true,
+  "guarantee": "LOCAL_INTEGRITY"
+}

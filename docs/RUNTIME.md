@@ -1,8 +1,74 @@
-# Optional runtime adapter contract
+# Runtime adapter contract
 
-These are requirements for porting the advanced runtime, NOT code already shipped in
-this starter. A plain Markdown install offers procedural safeguards only. Bind each
-enforced claim to its implementing function and negative test before marking it active.
+These are the enforced contracts of the runtime shipped in `agent_loop/`
+(stdlib-only, CLI `python -m agent_loop --project <root> ...`). Every
+enforced claim below is bound to an implementing module and focused
+regressions under `tests/`; the mapping for all transfer IDs lives in
+[TRANSFER](TRANSFER.md). All guarantees are LOCAL_INTEGRITY, not an OS
+sandbox. Bind each claim to its implementing function and negative test
+before marking it active in a fork.
+
+## Task schema and CLI
+
+One compact versioned task file is the only authoritative task database for the
+executable path: `ual-task/1` JSON at `<project>/task.json`. A valid minimal FULL
+example (a valid LIGHT task keeps `mode`, the fact fields, empty `requirements`,
+and `success_criteria_count: 0`):
+
+```json
+{
+  "schema": "ual-task/1",
+  "id": "demo-task",
+  "title": "Synthetic demo task",
+  "mode": "FULL",
+  "risk": "MEDIUM",
+  "work_kind": "IMPLEMENTATION",
+  "oracle_strength": "STRONG",
+  "novelty": "ROUTINE",
+  "ambiguity": "CLEAR",
+  "failure_evidence": "NONE",
+  "escalation_evidence": "NONE",
+  "authority_domains": [],
+  "material_contradiction": false,
+  "clarification_status": "RESOLVED",
+  "open_clarification_ids": [],
+  "owner_actor": "OWNER",
+  "requirement_ids": ["R1"],
+  "success_criteria_count": 1,
+  "requirements": [
+    {"id": "R1", "criterion": 1, "command": 1, "evidence": "TEST_OUTPUT"}
+  ],
+  "validation": {
+    "commands": [
+      {"ordinal": 1, "cwd": ".", "argv": ["python", "check.py"],
+       "expected_outcomes": ["RED", "GREEN"]}
+    ],
+    "seed": "0",
+    "environment": {"base": ["SYSTEMROOT", "PATH"], "overlay": {}}
+  },
+  "candidate": {"allowlist": ["src/demo.py"], "report": "report/IMPLEMENTATION.md"},
+  "required_skills": [],
+  "review": {"passes": 2},
+  "audit": {"required": false},
+  "observer": {"policy": "AUTO"},
+  "generated_state": [],
+  "lessons_path": ".agent-loop/lessons.md"
+}
+```
+
+Command surface (all commands require `--project <root>` and print one JSON
+line; exit 0 on success, 2 with stable refusal codes otherwise):
+`task-validate`, `route check`, `status set`, `claim acquire|scan|bind-child|
+release|abandon`, `run`, `validate record|status`, `event record`, `refresh`,
+`report-check`, `close`, `envelope freeze|verify`, `review validate|seal`,
+`accept`, `observer policy|record`, `audit package|verify|record|status`,
+`pack build|verify`, `progress check`, `continuation prepare|verify`,
+`context build|verify`, `report efficiency|delivery`.
+
+Trusted local configuration lives in `<project>/.agent-loop/config.json`
+(`ual-config/1`: `owner_actor`, neutral `role_bindings`, `audit_policy`);
+untrusted task, candidate and evidence bytes are bound by digests in the
+artifacts themselves.
 
 ## Provider boundary
 
@@ -81,9 +147,11 @@ iteration. It does not create an overall retry limit. Author the fence before pa
 for a writer; boilerplate startup is permitted separately, not counted as a test.
 
 Finish in the runtime's declared order: final GREEN → finalize report → generated-state
-refresh → report check → engineer close. This starter has no such CLI; never invent it.
-If the adapter's close is terminal, no tools after successful close, including todo tools
-or a second close. A refused close does not arm that terminal boundary.
+refresh → report check → engineer close. The portable CLI enforces exactly this order
+(`agent_loop close` refuses otherwise) and rejects every further tool, run or validation
+event after a successful close. If a fork's close is terminal, no tools after successful
+close, including todo tools or a second close. A refused close does not arm that
+terminal boundary.
 
 ## Evidence realms and acceptance
 
@@ -100,11 +168,44 @@ Without Git, list explicit files and disclose unverified diff completeness.
 
 ## Audit and recovery
 
+**Audit and recovery.** When a primary auditor is configured, every audit
+result and quota receipt must carry a bound `ual-audit-route-receipt/1`:
+task ID, exact audit package manifest/payload digests, requested model,
+observed model, terminal `FINISHED` status, integer exit code, and the exact
+result/raw-error file path, bytes and SHA-256. A primary PASS requires
+exit 0 and `requested_model == model_observed == configured primary`. A valid
+negative primary verdict remains a real result (never fallback) and still
+needs the fully bound primary receipt. The quota receipt is no longer minted
+from a bare reason string: `audit quota-receipt` requires a primary
+`PROVIDER_FAILURE` route receipt bound to the same task/package whose
+structured raw provider-error evidence (HTTP/API status 429 or an explicit
+provider quota code, with terminal error) mechanically classifies as
+`PRIMARY_QUOTA_EXHAUSTED`; `--reason` is only a cross-check. Fallback results
+must identify the configured fallback and still require the same-package
+quota receipt. Route receipts are tamper-evident local bindings under
+LOCAL_INTEGRITY, not OS authentication.
+
+The status/code/terminal facts are parsed from the bound UTF-8 JSON raw-error
+bytes. Optional CLI fields only cross-check those bytes and cannot manufacture
+quota evidence. Before admitting a fallback, the runtime revalidates the quota
+receipt, referenced route receipt and raw-error bytes as one chain.
+At final acceptance it also re-derives the current audit policy and revalidates
+the audit package, result, route and quota chain. Temporarily removing `primary`,
+recording an UNKNOWN audit and restoring the original config bytes cannot launder
+that record through the configured-primary gate.
+
 Send a secret-scanned immutable package bound to the exact latest candidate and task.
 Verify bytes before use, and again on return. Bind verdict to package and actual route.
 A successful provider process or outer AUDIT_RESULT is not an inner PASS.
 No old audit may accept a repaired candidate. Multiple conflicting terminal records
 require adjudication rather than selecting the convenient result.
+
+When the task requires audit and trusted config names a primary auditor, `audit record`
+requires a validated route receipt whose requested and observed identities agree and
+match the result's `requested_model`. Missing identity is a hard refusal, not an
+acceptable `UNKNOWN`.
+Fallback identity must name the configured fallback and still needs the exact-package
+primary-quota receipt described below.
 
 Fallback needs explicit policy and objective provider failure. A negative valid audit
 is not a fallback trigger. The example's independent Sol fallback always stays visibly
@@ -118,24 +219,27 @@ Missing or drifted identity cannot be repaired by prose. Repair-pack sequencing 
 
 ## Port acceptance tests
 
-Required gate composition for any future accepting runtime (not implemented merely by
-calling one reference function): validate task/preflight syntax AND separately reject
+Required gate composition of the accepting runtime: validate task/preflight syntax AND
+separately reject
 material ambiguity before spawn; derive actual footprint and allowed route; bind the
 candidate/skill/command closure; validate execution evidence; perform bound review and
 durable correction; require FULL convergence and the high-risk challenge when applicable;
 validate any required latest-candidate audit; finally verify the manual owner decision.
 Recheck the bindings at acceptance. Omitting one stage is not a supported fast path.
 
-In particular, historical parse_two_pass_review without root/task_id only checks shape.
-It must never be used that way on an accepting path. The repaired review adapter covers
-only bound review/correction, not this whole composition. Original reference/smoke.py
+The historical `parse_two_pass_review` without root/task_id only checks shape.
+It must never be used that way on an accepting path; the runtime review gate binds
+root and task, and the preserved reference guard stays composable only after its
+pinned reference identity verifies. The original reference/smoke.py
 does not exercise the high-risk challenge or provider-selection APIs; instructions
-requiring those checks are not a claim they are covered by that smoke.
+requiring those checks are covered by the runtime suite, not by that smoke.
 
-At minimum reproduce: duplicate writer; PID reuse; orphaned launcher; live-claim resume;
-missing/extra/malformed receipt; profile drift; no-reader inline relay; premature close;
-extra fence occurrence; different RED/GREEN command; report-only finalization vs code
-mutation after GREEN; post-close tool event; stale candidate audit; invalid inner verdict;
-fallback provenance mismatch; ambiguous previous progress; escaping path; changed stored
-bytes; incomplete command capture. Each test must exercise the real adapter path, not
-only a validator called directly by a test.
+The shipped focused suite reproduces, against the real CLI path: duplicate writer;
+checkout-scope claims across task IDs; PID/birth-identity refusals; orphan/ambiguous
+claim with owner adjudication; live continuation; command/argument drift; post-GREEN
+candidate drift; forged ledger records; symlink escape; log overflow; missing/invalid/
+duplicate observer receipts; terminal nonzero; multiline stdin delivery with
+receiver-bound acknowledgment; build-last pack drift; stale audit; invalid inner
+audit verdict; fallback refusal; failed acceptance; and complete-fingerprint
+nondeterminism. Each case drives `python -m agent_loop` in an isolated fixture
+project, not a validator called directly by a test.

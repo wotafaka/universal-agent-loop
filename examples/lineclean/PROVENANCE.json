@@ -1,0 +1,91 @@
+{
+  "schema": "sanitized-pilot-example/1",
+  "members": [
+    {
+      "transform": "UTF-8 text reserialization; project-root and session-id substitutions; outputs and claims otherwise unchanged",
+      "public_sha256": "6598e70544334d8a2db919b39761c71f44273ab5931a61f74714a2597a0c213b",
+      "path": "history/task.txt",
+      "source_sha256": "683bd8bc9b103b92795433cae447d081f92dc57dcb11ff34320c115d612175bd",
+      "source_label": "pilot/.agent-loop/TASK.md"
+    },
+    {
+      "transform": "UTF-8 text reserialization; project-root and session-id substitutions; outputs and claims otherwise unchanged",
+      "public_sha256": "fd44eb4f56f709bfdd9e6e4c0526bfca9fe8d09980d77815b7a561ee40216d43",
+      "path": "history/implementation.txt",
+      "source_sha256": "6413a4cfcb47afc0872e02bd753c405ff926547a8e553bce2d113b6560aa213b",
+      "source_label": "pilot/IMPLEMENTATION_REPORT.md"
+    },
+    {
+      "transform": "UTF-8 text reserialization; project-root and session-id substitutions; outputs and claims otherwise unchanged",
+      "public_sha256": "2d3fe540dbea6a40a291c7f2070c2cece3188fe09971bc636c93ff9db2c8c8bd",
+      "path": "history/state.txt",
+      "source_sha256": "bbc5901da4afa5dc111468f8899d4980fcda619d7b84fc8b7a018600420f1fc7",
+      "source_label": "pilot/.agent-loop/STATE.md"
+    },
+    {
+      "transform": "UTF-8 text reserialization; project-root and session-id substitutions; outputs and claims otherwise unchanged",
+      "public_sha256": "ecc7b7161b48f06b567ed33392e0fa9177bb3c6fe0f705d46f8fd0611fea154d",
+      "path": "history/engineer-events.json",
+      "source_sha256": "167614f3bc0b4ca2707212f918b10fdee1e00fd2ed30d248cc08965a44683852",
+      "source_label": "pilot/.agent-loop/evidence/engineer-events.json"
+    },
+    {
+      "transform": "UTF-8 text reserialization; project-root and session-id substitutions; outputs and claims otherwise unchanged",
+      "public_sha256": "5f1aa2021bc8cb583359f03159c09d55a249ee8359c94fd9d25c861b6f133eed",
+      "path": "history/parent-checks.json",
+      "source_sha256": "5f1aa2021bc8cb583359f03159c09d55a249ee8359c94fd9d25c861b6f133eed",
+      "source_label": "pilot/.agent-loop/evidence/parent-checks.json"
+    },
+    {
+      "transform": "UTF-8 text reserialization; project-root and session-id substitutions; outputs and claims otherwise unchanged",
+      "public_sha256": "eae8ce81eb3e6975867baad00605144c1b635af6c8b040938649cdca64bc0c32",
+      "path": "history/parent-tests.txt",
+      "source_sha256": "30db5a75d5551bba4acce6dea79903762ccea7145204e95300e8e1a6a9e697f5",
+      "source_label": ".validation/lineclean-pilot-run-5/parent-tests.txt"
+    },
+    {
+      "transform": "UTF-8 text reserialization; project-root and session-id substitutions; outputs and claims otherwise unchanged",
+      "public_sha256": "d8b8b85bb57ff345b23af448f08af570bca1fd43385fda4f697b104b64e75658",
+      "path": "history/review-initial.txt",
+      "source_sha256": "d8b8b85bb57ff345b23af448f08af570bca1fd43385fda4f697b104b64e75658",
+      "source_label": ".validation/lineclean-pilot-run-5/sol-review-summary.md"
+    },
+    {
+      "transform": "UTF-8 text reserialization; project-root and session-id substitutions; outputs and claims otherwise unchanged",
+      "public_sha256": "c8cc0c3afe40dd3109b5e0f873b9b32039e1d8ab7d2139c08faf8eb4f913416f",
+      "path": "history/review-final.txt",
+      "source_sha256": "c8cc0c3afe40dd3109b5e0f873b9b32039e1d8ab7d2139c08faf8eb4f913416f",
+      "source_label": ".validation/lineclean-pilot-run-7/sol-review.md"
+    },
+    {
+      "transform": "UTF-8 text reserialization; project-root and session-id substitutions; outputs and claims otherwise unchanged",
+      "public_sha256": "5f34541fc61cca4ef379946fbfae84d9d4e3df4ed1683f38657834b27e0c2b06",
+      "path": "history/owner-acceptance.txt",
+      "source_sha256": "5f34541fc61cca4ef379946fbfae84d9d4e3df4ed1683f38657834b27e0c2b06",
+      "source_label": ".validation/LINECLEAN_OWNER_ACCEPTANCE.md"
+    },
+    {
+      "transform": "byte-identical copy",
+      "public_sha256": "cdbc1136950e74cdd796aa48fd16432b13ff1f3e010807c5a3870183c4718809",
+      "path": "lineclean.py",
+      "source_sha256": "cdbc1136950e74cdd796aa48fd16432b13ff1f3e010807c5a3870183c4718809",
+      "source_label": "pilot/lineclean.py"
+    },
+    {
+      "transform": "byte-identical copy",
+      "public_sha256": "1a034f1061799b24756902d7deeb3d1d88ed1166dc7935f5bbaa629d7327acd4",
+      "path": "tests/test_lineclean.py",
+      "source_sha256": "1a034f1061799b24756902d7deeb3d1d88ed1166dc7935f5bbaa629d7327acd4",
+      "source_label": "pilot/tests/test_lineclean.py"
+    },
+    {
+      "transform": "byte-identical copy",
+      "public_sha256": "c6a7eab7ab769744dad295f9397743796d6ac0eaaa34961ce719f9d81bdb731d",
+      "path": "examples/input.txt",
+      "source_sha256": "c6a7eab7ab769744dad295f9397743796d6ac0eaaa34961ce719f9d81bdb731d",
+      "source_label": "pilot/examples/input.txt"
+    }
+  ],
+  "guarantee": "LOCAL_INTEGRITY; curated publication, not full signed transcript",
+  "historical_freeze_sha256": "38fca02cd87c82009dc1a5d738d0c960b4c1a920231d1664e1661ce251c7323e"
+}

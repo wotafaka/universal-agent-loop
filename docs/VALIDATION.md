@@ -1,8 +1,9 @@
 # Verification scope — 2026-08-31
 
-This is a delivery summary under LOCAL_INTEGRITY, not an independent trust domain,
-public license, owner decision or proof that the complete runtime was ported.
-It separates the historical reference, the first private audit and subsequent repairs.
+This is a chronological delivery summary under LOCAL_INTEGRITY, not an independent
+trust domain or self-validating release receipt. It separates the historical starter,
+the executable runtime, frozen external audits and subsequent repairs. A verdict only
+covers the exact package hashes supplied to that auditor.
 
 ## Environment and historical reference
 
@@ -158,24 +159,43 @@ belong to the new archive's external receipt, not the old audits above. Private 
 logs, receiver data, acceptance record and helper scripts remain outside distribution.
 This summary is LOCAL_INTEGRITY reporting, not an independently signed public transcript.
 
-## Not established
+## Runtime continuation and current boundaries
 
 - No native automatic skill/profile discovery test or executed one-tool-only pilot;
-  the real pilot used separate external engineer and Sol reviewer sessions.
+  the real pilots used separate external engineer and reviewer sessions.
 - No Linux/macOS execution evidence.
-- No generic model launcher, process locks, observer receipts, repair-pack builder,
-  automatic routing, lifecycle or acceptance CLI shipped. One-off development scripts
-  and local process logs are excluded from distribution.
+- The runtime ships process claims, supervised command launching/native handoff,
+  observer receipts, repair packs, lifecycle, review and acceptance gates. It does not
+  install provider CLIs, authenticate provider accounts or make a universal model
+  choice; configured routes remain host-specific.
 - No measured token/cost/quota saving. MODEL_ECONOMY describes policies and measurement.
-- No high-risk challenge/provider-routing coverage implied by the historical smoke or
-  the new review/correction-only guard; a complete runtime must compose all required gates.
+- Synthetic smoke/quickstart actors are not independent reviewers. The real provider
+  pilot proves one Windows route, not universal quality or every provider integration.
 - Source regression suites were mapped, not run against the active source project.
-- The earlier private checks granted no public license and performed no Git upload.
-  The owner subsequently selected MIT; see LICENSE and PROVENANCE. Actual publication
-  and downloaded-byte checks must be recorded separately for the licensed artifact.
+- MIT is the selected public license; see LICENSE and PROVENANCE. A packaged document
+  cannot prove Git upload, remote CI or downloaded bytes. Those are external release
+  receipts bound to the published commit/archive.
 
-PACKAGED_FILES.json lists the distribution paths, stored bytes and SHA-256, excluding
-itself and local validation artifacts. The final scan covers that inventory plus the
-manifest. Bounded patterns cannot certify absence of all secrets. Raw development
-logs and independent messages remain outside the package; this summary is not a signed
-transcript. Validate the archive against its inventory before any transmission.
+The first exact runtime archive audited by Opus 5 received PASS. A later candidate,
+after additional route-identity hardening, was offered to Opus 5 first and received a
+terminal 429 quota response. Only then did an exact-same-package Sol fallback audit run;
+it found three material defects: forgeable/incomplete audit-route evidence, installer
+ownership-path escape through links, and missing live-input revalidation before a
+repair launch. Those findings were repaired with focused regressions. Parent challenge
+then found and closed one remaining semantic gap: quota facts must be derived from the
+bound raw error bytes, route requested/observed identities must agree, and the complete
+quota evidence chain is revalidated before fallback. The repaired bytes require a new
+exact-package independent audit; an earlier PASS never transfers across changed bytes.
+
+That next exact-package Opus 5 audit independently reproduced all prior repairs but
+found one further material acceptance seam: a writer could temporarily remove the
+configured primary, record an honest UNKNOWN-model PASS, restore the original config
+bytes, and pass the old digest-only acceptance check. A RED control/bypass regression
+reproduced the issue. Acceptance now re-derives current policy and revalidates the
+audit package, result bytes, route identity and any quota chain before writing an
+acceptance record. These changed bytes again require a fresh exact-package audit.
+
+The release manifest lists distribution paths, stored bytes and SHA-256. Bounded
+patterns cannot certify absence of all secrets. Raw development logs and independent
+messages remain outside the package; this summary is not a signed transcript. Validate
+the archive against its release manifest before any transmission.

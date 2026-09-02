@@ -6,6 +6,11 @@ Read .agent-loop/docs/SKILLS.md; load only triggered skills, completely.
 Read .agent-loop/docs/WORKFLOW.md for a new role or an authority conflict.
 
 - Establish an observable result and focused checks before nontrivial work.
+- For software work, load [karpathy-guidelines] (assumptions, smallest verifiable
+  outcome, surgical changes, goal-driven checks) and [ponytail] (dependency ladder:
+  need -> existing helper -> stdlib -> native feature -> installed dependency ->
+  minimum new code; never simplify away validation, security, data integrity,
+  error handling or explicit requirements) from .agent-loop/skills/, completely.
 - Keep one candidate writer. Engineer and reviewer use separate bounded sessions.
 - Follow task role/model bindings; use commands for mechanical work, observers only as required.
 - In a single chat, label checks self-review; never invent independent review.

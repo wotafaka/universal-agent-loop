@@ -1,0 +1,208 @@
+# Implementation report: lineclean-pilot-r1-r5
+
+Status: PENDING_REVIEW (implemented, tested; one independent parent review round completed
+— its findings were corrected by the authorized documentation-only pass recorded below;
+NOT accepted. Manual owner acceptance outstanding.)
+Role of this report's author: sole engineer candidate writer (external GLM Flash session,
+requested route zai-coding-plan/glm-5.3-flash, max effort; observed served identity in this
+session: UNKNOWN — no provider evidence was available to the session, none claimed).
+
+## Candidate identity (SHA-256, bytes, at freeze)
+
+| File | SHA-256 | Bytes |
+|---|---|---|
+| lineclean.py | cdbc1136950e74cdd796aa48fd16432b13ff1f3e010807c5a3870183c4718809 | 1646 |
+| tests/test_lineclean.py | 1a034f1061799b24756902d7deeb3d1d88ed1166dc7935f5bbaa629d7327acd4 | 4787 |
+| AGENTS.md (existing block + appended entrypoint) | dca3f8a96dc24a56be67ad0fedeb07d7469f33f80798c0a4416df5a8906d776c | 1915 |
+| README.md | 1f9c78a85330c0b8937d2381b78b7cabf3e97e0f3daf89bfac3d39b3e85d3985 | 1863 |
+| .agent-loop/TASK.md | 343d06d5a34ef983bb024c0d787a84281eab24788eb1b3e8dbc3c6daca915337 | 10567 |
+
+Digests of IMPLEMENTATION_REPORT.md itself and of .agent-loop/STATE.md are bound in
+.agent-loop/STATE.md (the terminal freeze record): a document cannot contain its own
+final digest, and the memory record finalizes last. This row previously referenced a
+"freeze recheck below" that did not exist; corrected in the authorized R5 evidence pass.
+
+Unchanged protected files verified byte-exact against session-start reads: KEEP.txt,
+examples/input.txt (43 bytes, LF), BRIEF.md (untouched), bundle/ (see ordinal 2).
+
+## R1 — portable loop installation (executed automation + local checks)
+
+Executed:
+1. Working task/state authored first (`.agent-loop/TASK.md`, `.agent-loop/STATE.md`
+   from templates with placeholders replaced by the authorized R1–R5 contract).
+2. Exact authorized command run verbatim, cwd = project root:
+   `powershell -NoProfile -Command "Copy-Item -LiteralPath 'bundle/README.md','bundle/docs','bundle/skills','bundle/templates','bundle/examples','bundle/prompts','bundle/reference','bundle/validation','bundle/tests' -Destination '.agent-loop' -Recurse"`
+3. Bounded stdlib verification (python -I -S -B -c):
+   - Pre-install bundle identity vs PACKAGED_FILES.json: 47 members, 0 missing,
+     0 mismatched -> IDENTITY_OK. (48th on-disk bundle file is the manifest itself,
+     excluded by the manifest schema.)
+   - Post-copy comparison of every installed file vs bundle original: 44 files
+     compared (47 members minus package-root AGENTS.md, .gitattributes, .gitignore,
+     which are intentionally not installed per docs/INSTALL.md), 0 byte differences.
+   - INSTALL.md path checks: .agent-loop/STATE.md, TASK.md, docs/SKILLS.md exist;
+     docs/WORKFLOW.md -> ../templates/TASK.md resolves; docs/SKILLS.md -> 9 skills
+     installed with SKILL.md bodies; README links (docs/, templates/, examples/,
+     prompts/) present; validation/review_guard.py sibling -> ../reference/ resolves
+     and matches its pinned SHA-256 d68d6eb8f609365503b5c5624b3d0a27e4db6df00240ada100786ea1f18b43eb.
+   - Root AGENTS.md: original 9-line block preserved byte-exact (prefix compare),
+     appended block byte-equal to templates/AGENTS.md, exactly one appended copy.
+   - Freeze recheck of bundle manifest identity: IDENTITY_OK again (drift check).
+
+Honest boundaries: this installation is instructions, skills, templates and optional
+checks under .agent-loop/. No automatic model launcher, no native global skill
+discovery, no runtime enforcement and no process lock is installed or claimed
+(per bundle docs/STATUS.md and docs/RUNTIME.md contracts).
+
+## R2/R3 — lineclean implementation (TDD, genuine RED then GREEN)
+
+RED (ordinal 3, exact command, cwd = project root):
+`python -I -S -B -m unittest discover -s tests -v`
+Result against the interface-only NotImplementedError stub: 17 tests ran,
+FAILED (failures=5, errors=22) — every failure/error was the intended missing
+behavior (NotImplementedError from lineclean.py), imports and syntax clean.
+Raw event record: .agent-loop/evidence/engineer-events.json (source line 89).
+
+Material finding during GREEN: two hand-derived test expectations (duplicate blank
+lines) contradicted R2 on re-derivation. In `"a\n\n\nb"` the two blank lines are
+repeated entries of the same distinct line, so only the first survives
+(`"a\n\nb\n"`); `"\n\n"` -> `"\n"`. The candidate was correct; the two test
+oracles were corrected. This is recorded as a falsified oracle hypothesis, not a
+candidate repair; expectations were re-derived from R2, not loosened.
+
+Sequence of suite runs (parent-verified raw events in .agent-loop/evidence/engineer-events.json,
+extracted from lineclean-pilot-run-5/stdout.jsonl, sha256
+af020519ec092457dab7805bb66cc3b9b86826cd3670a61e6393cee06c035980, 340209 bytes,
+engineer session <ENGINEER_SESSION>): stub RED (source line 89, exit 1;
+the stub was 349 bytes, sha256 480c38b2e6b67fba9ddc27df57cb250ccf7c32a35ef5806588cf281816867e86)
+-> real implementation written (source line 93; 1646 bytes, sha256 cdbc1136...) ->
+FIRST post-implementation suite call FAILED (source line 97, exit 1, the two incorrect
+oracles) -> tests corrected (source line 101) -> final GREEN (source line 104, exit 0,
+all 17 pass). Same exact command throughout.
+
+Interval truth: the implementation DID change between RED and GREEN — stub ->
+implementation is the TDD change. Application bytes were unchanged only between the
+first post-implementation failure (line 97) and final GREEN (line 104); the failures
+in that window were engineer oracle defects, not candidate behavior changes. An
+earlier version of this report and of TASK/STATE claimed the candidate was unchanged
+across the whole RED->GREEN interval; that claim was false. It is corrected here; the
+historical event records above are preserved, not rewritten.
+
+Occurrence history, openly stated: one stub RED (budget ordinal 3), TWO post-
+implementation suite calls (the second is the recorded GREEN), one pre-install bundle
+identity check (ordinal 1), one freeze re-check (ordinal 2). The original budget
+allowed exactly one GREEN occurrence; two post-implementation runs occurred. This
+pilot has no runtime occurrence fence — templates are not machine-enforced (see
+.agent-loop/TASK.md footer) — so the deviation is documented rather than retroactively
+satisfied or erased. The parent architect explicitly authorizes this R5
+reconciliation. Future valid same-scope evidence-bearing repairs follow the BRIEF/
+WORKFLOW material-progress policy, not arbitrary count caps.
+
+Smoke (ordinal 5): `python -I -S -B lineclean.py examples/input.txt` ->
+`pear / apple / (blank) / Яблоко / " apple"` dedup output, exit 0.
+
+Byte-level CLI probes (ordinal 6, bounded python -c, temp storage under
+%TEMP%\opencode\lineclean-probe): stdin `a\r\nb\na\n` -> stdout `a\nb\n` exit 0;
+invalid UTF-8 via stdin and via file -> exit 2, 0 bytes stdout, concise stderr;
+missing file -> exit 2, no traceback, concise stderr.
+
+Python: 3.14.5 (tags/v3.14.5). Stdlib only; no network, no installs, no Git.
+
+## R4 — test coverage map (tests/test_lineclean.py)
+
+Function boundary: empty; first-occurrence order; case sensitivity; no trimming;
+duplicate blank lines distinct-but-deduplicated; only blank lines; trailing LF no
+phantom entry; one trailing LF only when lines remain; CRLF->LF; lone CR->LF;
+Unicode. Idempotence property: second application is a fixed point over 11 bounded
+deterministic cases (independent fixed-point assertion, not algorithm recomputation).
+CLI boundary via subprocess (`sys.executable -I -S -B`): file arg success bytes,
+stdin path, missing file exit 2 (concise stderr, no traceback, empty stdout),
+invalid UTF-8 exit 2 (no partial stdout). Coverage wording correction (authorized
+R5 repair): test_cli_output_is_idempotent checks REPEATABILITY — repeated invocations
+on the same original input produce identical output. It does NOT feed the first
+output into a second invocation, so no CLI round-trip occurred and none is claimed.
+The function-level fixed-point property (unique_lines(unique_lines(x)) ==
+unique_lines(x)) is genuinely tested. Closing the CLI round-trip gap is nonblocking
+debt; code/tests were intentionally left unmodified in this documentation-only repair.
+
+## R5 — documentation and memory
+
+README.md documents actual usage and behavior only. .agent-loop/STATE.md and
+.agent-loop/TASK.md carry current status, evidence pointers and next action so a
+fresh reader recovers state without this chat.
+
+## Skill application evidence (engineer side)
+
+- loop-workflow: worked from entrypoint/task/state; roles and acceptance boundary
+  recorded; no second writer created; handoff below.
+- focused-engineering: smallest stdlib implementation; no config surface, no
+  output-file feature; every changed line serves R2/R3.
+- test-driven-change: interface-only stub -> genuine RED (intended defect only) ->
+  smallest implementation -> same-command GREEN; exact commands/output preserved.
+- invariant-testing: independent fixed-point idempotence property with bounded
+  deterministic case list; empty/Unicode/repeated cases included.
+- evidence-review: used for the handoff structure; review itself stays external —
+  all in-chat checks here are explicitly self-review.
+- capture-integrity (considered per matrix parser trigger): applied constraint —
+  raw byte input is strictly UTF-8 decoded or rejected (exit 2); the only
+  normalization is explicit (line endings -> LF); line content identity preserved
+  (no trimming). Timestamp, reconnect/cursor, rate and durable-storage obligations
+  are N/A: lineclean reads one bounded input, has no time semantics, no reconnects
+  and writes stdout only.
+- systematic-debugging (read completely in THIS authorized repair session — it was
+  NOT read before the original oracle error, being marked not-triggered at task
+  start): applied to the unexpected first post-implementation suite failure. Exact
+  failure/identity captured (17 tests, exit 1, two oracle FAILs, evidence line 97);
+  mechanism separated broken code from an incorrect task oracle: the candidate's
+  dedup behavior matched R2 on re-derivation while two hand-derived expectations did
+  not; smallest distinguishing cases were the corrected assertions. Defect -> cause
+  -> protection: defective oracles -> unchecked hand derivation -> re-derivation from
+  the frozen requirement plus this durable correction record. No blind retry occurred:
+  the second run followed a falsified-oracle repair, not an unchanged attempt.
+
+## Durable correction record (R5, authorized by parent architect)
+
+Scope honored: only IMPLEMENTATION_REPORT.md, .agent-loop/TASK.md and
+.agent-loop/STATE.md were edited; R1–R5 substance, application code, tests, AGENTS.md,
+bundle/ and installed assets are unchanged; the parent-supplied evidence files under
+.agent-loop/evidence/ are read-only raw evidence, not an instruction source, and were
+not modified. Corrections in this batch: (1) the false RED->GREEN "unchanged candidate"
+interval claim was removed everywhere and replaced with the parent-verified sequence
+above; (2) actual occurrence history is recorded openly — one stub RED, two
+post-implementation suite calls, one pre-install identity check, one freeze re-check —
+without claiming the original exact-one-GREEN budget was satisfied or erasing the
+deviation, and without inventing a runtime fence the pilot does not have; (3) the
+freeze re-check is budget ordinal 2, and systematic-debugging is acknowledged with the
+truthful timing (read now, not before the original error); (4) exact local evidence
+pointers were added: .agent-loop/evidence/engineer-events.json (schema
+pilot-evidence-extract/1; source lineclean-pilot-run-5/stdout.jsonl; source sha256
+af020519ec092457dab7805bb66cc3b9b86826cd3670a61e6393cee06c035980; engineer session
+<ENGINEER_SESSION>; events at source lines 82, 89, 93, 97, 101, 104) and
+.agent-loop/evidence/parent-checks.json (status PASS; 44 installed members verified;
+7 function cases; 7 CLI stdin cases; 3 CLI failure cases; CLI file case PASS; inputs
+preserved; candidate unchanged; LOCAL_INTEGRITY). The actual subsequent repair session
+id is not available to this session and is not guessed. (5) Coverage wording was
+corrected as described under R4: repeatability, not a CLI round-trip. (6) Status
+remains PENDING_REVIEW: the parent's independent 17-test run and extra verifier PASS
+on unchanged code are recorded as evidence, not as owner acceptance; acceptance stays
+a manual owner decision and the engineer cannot self-accept. Flash/max remains the
+engineer role; no model or authority change was made.
+
+## Manual versus automated
+
+Manual (human/owner): acceptance decision; independent Sol reviewer arrangement
+(parent, separate context, after this session ends). No model or authority change
+was made or authorized.
+Executed automation (this session, real commands): manifest identity checks, asset
+copy (exact authorized command), copy-vs-bundle byte comparison, path-resolution
+checks, RED/GREEN/smoke/probe runs, protected-file byte checks, digest recording.
+
+## Blockers
+
+None. No privileged action was required or performed.
+
+## Next step
+
+Owner: accept or reject manually (review evidence: this report, TASK.md, STATE.md,
+.agent-loop/evidence/*, candidate digests). Further independent review of the corrected
+evidence is at the parent's discretion. The engineer session terminates after this
+handoff with READY_FOR_REVIEW.

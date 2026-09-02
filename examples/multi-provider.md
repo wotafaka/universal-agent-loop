@@ -46,6 +46,52 @@ valid FAIL from Opus never triggers model shopping. Local package drift blocks b
 The source avoids a duplicate paid Opus attempt on the same frozen package; that is an
 idempotency/cost policy, not a global limit on repairs of changed candidates.
 
+## Primary auditor -> evidence-bound fallback policy
+
+The runtime expresses the owner's audit ordering as a configurable policy, never a
+built-in default. In `.agent-loop/config.json` (trusted local authority config):
+
+```json
+"audit_policy": {
+  "primary": "claude-opus-5",
+  "fallback": "gpt-5.6-sol",
+  "fallback_requires": "PRIMARY_QUOTA_EXHAUSTED"
+}
+```
+
+With this binding the runtime enforces exactly:
+
+1. The required audit is accepted only from the primary model `claude-opus-5`.
+2. A Sol (`gpt-5.6-sol`) audit is permitted only after a machine-readable
+   primary quota receipt — recorded by `agent_loop audit quota-receipt` for the
+   exact frozen package (manifest+payload digests) with reason
+   `PRIMARY_QUOTA_EXHAUSTED` — proves the primary had no tokens left.
+3. A negative Opus verdict, a malformed result, auth/CLI/network errors, local
+   package drift, an active Opus run, or preference never permit Sol substitution;
+   invalid FAIL findings classify `AUDIT_RESULT_INVALID`, never fallback.
+4. Acceptance requires a clean `PASS`; `CONDITIONAL_PASS` records but never
+   satisfies the required-audit gate.
+5. The observed auditor model comes from the bound launcher/route receipt, not
+   auditor self-assertion. For a required audit with a configured primary,
+   missing/unproven identity fails closed; optional ungated routes may still
+   report `UNKNOWN` honestly.
+
+Without this binding no fallback exists at all: an unavailable route is reported
+honestly and the required-audit gate stays unsatisfied.
+
+Every audit result and quota receipt carries a bound
+`ual-audit-route-receipt/1` (task ID, exact package manifest/payload digests,
+requested model, observed model, terminal `FINISHED` status, integer exit
+code, and the exact result/raw-error file path, bytes and SHA-256). A primary
+PASS additionally requires exit 0 and `requested_model == model_observed ==
+claude-opus-5`. The quota receipt is minted only from a primary
+`PROVIDER_FAILURE` route receipt whose structured raw provider-error evidence
+(HTTP/API status 429 or an explicit provider quota code, with terminal error)
+mechanically classifies as `PRIMARY_QUOTA_EXHAUSTED`; the `--reason` string is
+a cross-check, never sufficient by itself. Those structured facts are parsed from
+the bound raw-error JSON bytes; CLI metadata cannot invent them, and the complete
+quota → route → raw chain is revalidated before a fallback result is accepted.
+
 Public default remains manual acceptance. The source's private automatic acceptance
 for explicitly delegated nonprivileged work is NOT inherited by a new project. If desired,
 the owner must configure it separately, with no engineer self-acceptance and rechecks of
@@ -56,7 +102,8 @@ candidate, review, audit and role identity immediately before archive.
 Use this configuration as an example, not a hardcoded dependency. Inventory my installed
 tools and available independent-session mechanisms without reading or exporting secrets.
 Apply prompts/INTEGRATE.md. Map these roles to what I actually use. If I use only one
-tool, preserve separate engineer/reviewer contexts within that tool. Start with the
-instruction-only mode and disclose it. Implement optional runtime automation only through
-a separate bounded task with source-mapped tests; never claim the documented adapter is
-already installed. Preserve stronger existing project safety and acceptance rules.
+tool, preserve separate engineer/reviewer contexts within that tool. Start by running
+the offline quickstart, then choose either the executable runtime sidecar or the lighter
+instruction-only mode deliberately. Preserve stronger existing project safety and
+acceptance rules; never claim provider integration or native skill discovery without
+testing it on the actual host.

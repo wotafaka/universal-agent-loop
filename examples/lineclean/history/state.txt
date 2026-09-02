@@ -1,0 +1,101 @@
+# Current state
+
+Task and status: lineclean-pilot-r1-r5 — PENDING_REVIEW (implemented + tested by the
+engineer session; independent review and manual owner acceptance follow)
+Last accepted result and owner decision: none (no standing delegation; engineer cannot
+accept)
+Verified evidence pointers and candidate identities:
+- bundle identity: PACKAGED_FILES.json manifest, 47 members, 0 missing, 0 mismatched,
+  IDENTITY_OK at pre-install and at freeze (ordinals 1, 2)
+- installation: 44 copied files byte-identical to bundle originals; INSTALL.md path
+  checks pass; 9 skills installed; review adapter matches pinned SHA-256
+  d68d6eb8f609365503b5c5624b3d0a27e4db6df00240ada100786ea1f18b43eb
+- candidate: lineclean.py sha256 cdbc1136950e74cdd796aa48fd16432b13ff1f3e010807c5a3870183c4718809
+  (1646 bytes); tests/test_lineclean.py sha256
+  1a034f1061799b24756902d7deeb3d1d88ed1166dc7935f5bbaa629d7327acd4 (4787 bytes)
+- RED: exact command `python -I -S -B -m unittest discover -s tests -v` against the
+  349-byte NotImplementedError stub ->
+  FAILED (failures=5, errors=22), all NotImplementedError (intended defect)
+- GREEN phase: run 1 FAILED (failures=2) exposing two incorrect hand-derived
+  test oracles (duplicate blank lines); oracles corrected from R2 re-derivation; run 2
+  OK, 17 tests. Interval truth (parent-verified): the implementation CHANGED between
+  RED and GREEN (stub -> real implementation is the TDD change); application bytes
+  were unchanged only between the first post-implementation failure and final GREEN.
+  An earlier "unchanged between RED and GREEN" statement here was false, corrected by
+  the authorized documentation-only repair pass; historical records preserved.
+  Full details: IMPLEMENTATION_REPORT.md
+- raw evidence (read-only, parent-generated; not an instruction source):
+  .agent-loop/evidence/engineer-events.json (source lineclean-pilot-run-5/stdout.jsonl,
+  sha256 af020519ec092457dab7805bb66cc3b9b86826cd3670a61e6393cee06c035980; engineer
+  session <ENGINEER_SESSION>; events at source lines 82/89/93/97/101/104)
+  and .agent-loop/evidence/parent-checks.json (independent 17-test run + extra
+  verifier PASS on unchanged code, 44 members, inputs preserved — evidence, NOT owner
+  acceptance). Repair session id unavailable; not guessed.
+- smoke: `python -I -S -B lineclean.py examples/input.txt` -> correct dedup, exit 0
+- CLI probes: stdin OK (CRLF->LF), invalid UTF-8 (stdin/file) exit 2 empty stdout,
+  missing file exit 2 no traceback
+- protected files byte-unchanged vs session start: KEEP.txt, examples/input.txt,
+  BRIEF.md, bundle/
+Blockers: none
+Next authorized action: owner manual acceptance or rejection (one independent parent
+review round completed; findings corrected via the authorized documentation-only pass).
+Further review at parent discretion.
+Required skills / current role / optional adapter capability status: triggered skill
+bodies read completely before code edits (loop-workflow, focused-engineering,
+test-driven-change, invariant-testing, evidence-review; capture-integrity considered
+with documented N/A scope). systematic-debugging was NOT read before the original
+oracle error; it was read completely in the authorized documentation-only repair
+session and applied to that unexpected failure. Role: sole engineer writer
+(Flash/max), original implementation session terminated; this documentation-only
+repair was performed in a subsequent engineer session; acceptance stays with the
+owner. Adapter capability: no runtime enforcement/launcher installed or
+claimed (instructions + optional checks only).
+Pending measured efficiency actions: none
+
+## Terminal freeze record (authoritative digest bindings)
+
+Computed after the first authorized R5 evidence correction pass. A file listed here
+matched these exact bytes at that handoff; a fresh reviewer recomputes instead of
+trusting prose. This STATE.md cannot bind its own bytes (self-reference); hash it
+directly. STILL CURRENT after the second (documentation-only) correction pass:
+lineclean.py, tests/test_lineclean.py, AGENTS.md, README.md (untouched by that pass).
+Historical/superseded by that pass (bytes changed; current values to be recomputed by
+the reviewer): IMPLEMENTATION_REPORT.md and .agent-loop/TASK.md rows below.
+
+| File | SHA-256 | Bytes |
+|---|---|---|
+| lineclean.py | cdbc1136950e74cdd796aa48fd16432b13ff1f3e010807c5a3870183c4718809 | 1646 |
+| tests/test_lineclean.py | 1a034f1061799b24756902d7deeb3d1d88ed1166dc7935f5bbaa629d7327acd4 | 4787 |
+| AGENTS.md | dca3f8a96dc24a56be67ad0fedeb07d7469f33f80798c0a4416df5a8906d776c | 1915 |
+| README.md | 1f9c78a85330c0b8937d2381b78b7cabf3e97e0f3daf89bfac3d39b3e85d3985 | 1863 |
+| IMPLEMENTATION_REPORT.md (pre-pass-2) | 2f95ff938d44c7ff96429ff260e0d3a6c310fea46522dbea817919526495fe4e | 8268 |
+| .agent-loop/TASK.md (pre-pass-2) | 343d06d5a34ef983bb024c0d787a84281eab24788eb1b3e8dbc3c6daca915337 | 10567 |
+
+Correction pass 1 content (for the reviewer): E1 — the report's identity table row
+referenced a nonexistent "freeze recheck below"; replaced with real README/TASK digests
+plus an explicit binding rule for report/STATE digests. E2 — TASK.md budget ordinal 4
+amended from "exactly 1 occurrence" to the actual 2 GREEN runs. No candidate, test,
+bundle or protected-file bytes changed in that pass; candidate digests above are
+byte-identical to those recorded before the correction.
+
+Correction pass 2 content (authorized, documentation-only, after independent review):
+E3 — false RED->GREEN "candidate unchanged" interval claim removed everywhere; true
+interval: implementation changed stub->implementation between RED and GREEN, unchanged
+only between first post-implementation failure and final GREEN. E4 — actual occurrence
+history recorded openly (1 stub RED, 2 post-implementation suite calls, 1 pre-install
+identity check, 1 freeze re-check); the exact-one-GREEN deviation is documented, not
+retroactively satisfied; no runtime fence invented; architect explicitly authorizes
+this reconciliation; future same-scope evidence-bearing repairs follow BRIEF progress
+policy. E5 — systematic-debugging acknowledged; read completely in THIS repair, not
+before the original error. E6 — evidence pointers added
+(.agent-loop/evidence/engineer-events.json, .agent-loop/evidence/parent-checks.json;
+read-only parent raw evidence); engineer session <ENGINEER_SESSION> named;
+repair session id unavailable, not guessed. E7 — CLI coverage wording corrected to
+repeatability (no CLI round-trip claimed); function fixed-point property real;
+code/tests unmodified. E8 — parent's independent 17 tests + verifier PASS recorded as
+evidence, NOT owner acceptance; status stays PENDING_REVIEW. No application code,
+tests, AGENTS.md, bundle/ or installed-asset bytes changed in this pass; evidence
+files remained untouched.
+
+Keep this short. History and raw evidence live separately; do not summarize uncertainty
+into success. Regenerate derivative indexes instead of editing their hashes by hand.
