@@ -15,6 +15,7 @@ import shutil
 import subprocess
 import sys
 import unittest
+import unittest.mock
 import zipfile
 from pathlib import Path
 
@@ -1170,9 +1171,8 @@ class AUDIT2_AuditPolicy(unittest.TestCase):
             h.run_cli(project, "envelope", "freeze", "--task", "demo-task")
             proc, payload = h.run_cli(
                 project, "audit", "package", "--task", "demo-task",
-                "--iteration", "1", "--input", "src/demo.py",
-                "--instruction", "task.json",
-                "--validation", "report/IMPLEMENTATION.md")
+                "--iteration", "1",
+                *h.audit_cli_flags(h.audit_closure_flags(project)))
             return project, payload["package"]
         except BaseException:
             shutil.rmtree(project, ignore_errors=True)
@@ -2074,9 +2074,8 @@ class AUDIT3_RouteReceiptBuilder(unittest.TestCase):
             h.run_cli(project, "envelope", "freeze", "--task", "demo-task")
             proc, payload = h.run_cli(
                 project, "audit", "package", "--task", "demo-task",
-                "--iteration", "1", "--input", "src/demo.py",
-                "--instruction", "task.json",
-                "--validation", "report/IMPLEMENTATION.md")
+                "--iteration", "1",
+                *h.audit_cli_flags(h.audit_closure_flags(project)))
             package = payload["package"]
             result = project / "audit_result.json"
             result.write_bytes(json.dumps({
@@ -2479,6 +2478,8 @@ class C8_TransmissionContainment(unittest.TestCase):
                   "--touched", "touched.md")
         h.run_cli(self.project, "pack", "verify", "--task", "demo-task",
                   "--iteration", "1")
+        h.run_cli(self.project, "attempt", "open", "--task", "demo-task",
+                  "--batch", "batch.md", "--pack-iteration", "1")
         proc, run = h.run_cli(
             self.project, "run", "--task", "demo-task", "--purpose",
             "ENGINEER", "--session-id", "sess-engineer",
@@ -2622,9 +2623,8 @@ class C8_AuditInnerContent(unittest.TestCase):
         h.run_cli(project, "envelope", "freeze", "--task", "demo-task")
         proc, payload = h.run_cli(
             project, "audit", "package", "--task", "demo-task",
-            "--iteration", "1", "--input", "src/demo.py",
-            "--instruction", "task.json",
-            "--validation", "report/IMPLEMENTATION.md")
+            "--iteration", "1",
+            *h.audit_cli_flags(h.audit_closure_flags(project)))
         self.package = payload["package"]
 
     def _manifest_path(self):
@@ -2823,6 +2823,327 @@ class C8_ContextPackInnerContent(unittest.TestCase):
                           "demo-task", "--pack",
                           ".agent-loop/tasks/demo-task/context_pack.md",
                           code="CONTEXT_INDEX_SET_DRIFT")
+
+
+class C9_RequiredAuditClosure(unittest.TestCase):
+    """CONTINUATION 9 / D1: a required audit package must carry the exact
+    candidate closure derived from the canonical live task plus the
+    current frozen envelope — task contract, every frozen candidate
+    member (allowlist plus report), every required skill, and the
+    decisive frozen validation evidence paths. A caller-selected subset
+    (task-only, or missing one candidate member) and a relabelled role
+    refuse at build and at verify; the full canonical package succeeds,
+    and an auto-derived mode removes rather than duplicates caller
+    authority."""
+
+    def _lifecycle(self, name, audit_required=True):
+        project = h.fresh_project(name, None)
+        self.addCleanup(shutil.rmtree, project, ignore_errors=True)
+        h.write_task(project, audit={"required": audit_required})
+        h.write_child(project, "check_demo.py", h.check_script(True))
+        h.authority(project)
+        for i in range(2):
+            proc, run = h.run_cli(
+                project, "run", "--task", "demo-task", "--purpose",
+                "VALIDATION",
+                "--argv-json", json.dumps(
+                    [h.sys_executable(), "check_demo.py"]))
+            h.run_cli(project, "validate", "record", "--task",
+                      "demo-task", "--run", run["run_id"], "--ordinal",
+                      "1")
+            if i == 0:
+                (project / "src" / "demo.py").write_bytes(b"VALUE = 2\n")
+        (project / "report" / "IMPLEMENTATION.md").write_text(
+            "done\n", encoding="utf-8")
+        h.run_cli(project, "refresh", "--task", "demo-task")
+        h.run_cli(project, "report-check", "--task", "demo-task")
+        h.run_cli(project, "close", "--task", "demo-task")
+        h.run_cli(project, "envelope", "freeze", "--task", "demo-task")
+        return project
+
+    def _build_package(self, project, pairs, expect=0):
+        args = ["audit", "package", "--task", "demo-task",
+                "--iteration", "1"]
+        args += h.audit_cli_flags(pairs)
+        return h.run_cli(project, *args, expect=expect)
+
+    def _manifest(self, project, package):
+        return json.loads(
+            (project / package / "manifest.json").read_text("utf-8"))
+
+    def _rewrite_payload(self, project, package, manifest):
+        from agent_loop.audit import render_package_payload
+        entries = [(entry["role"], entry["path"],
+                    (project / entry["path"]).read_bytes())
+                   for entry in manifest["inputs"]]
+        payload = render_package_payload(entries)
+        (project / package / "audit_payload.bin").write_bytes(payload)
+        manifest["payload"] = {
+            "path": "audit_payload.bin", "bytes": len(payload),
+            "sha256": hashlib.sha256(payload).hexdigest()}
+        _manifest_json_write(project / package / "manifest.json",
+                             manifest)
+
+    def test_task_only_package_refuses(self):
+        project = self._lifecycle("c9-closure-taskonly")
+        h.expect_refusal(
+            project, "audit", "package", "--task", "demo-task",
+            "--iteration", "1", "--instruction", "task.json",
+            code="AUDIT_CLOSURE_MISMATCH")
+
+    def test_missing_candidate_member_refuses(self):
+        project = self._lifecycle("c9-closure-missing")
+        closure = h.audit_closure_flags(project)
+        reduced = [(role, rel) for role, rel in closure
+                   if rel != "src/demo.py"]
+        h.expect_refusal(
+            project, "audit", "package", "--task", "demo-task",
+            "--iteration", "1", *h.audit_cli_flags(reduced),
+            code="AUDIT_CLOSURE_MISMATCH")
+
+    def test_relabelled_role_refuses(self):
+        project = self._lifecycle("c9-closure-relabel")
+        closure = h.audit_closure_flags(project)
+        relabelled = [("input" if rel == "task.json" else role, rel)
+                      for role, rel in closure]
+        h.expect_refusal(
+            project, "audit", "package", "--task", "demo-task",
+            "--iteration", "1", *h.audit_cli_flags(relabelled),
+            code="AUDIT_CLOSURE_MISMATCH")
+
+    def test_canonical_declared_package_succeeds_and_matches_closure(self):
+        project = self._lifecycle("c9-closure-canonical")
+        closure = h.audit_closure_flags(project)
+        proc, payload = self._build_package(project, closure)
+        self.assertTrue(payload["ok"])
+        manifest = self._manifest(project, payload["package"])
+        self.assertEqual(
+            [(entry["role"], entry["path"]) for entry in
+             manifest["inputs"]], closure)
+        proc, payload = h.run_cli(project, "audit", "verify", "--task",
+                                  "demo-task", "--package",
+                                  payload["package"])
+        self.assertTrue(payload["ok"])
+
+    def test_auto_derived_package_succeeds_and_matches_closure(self):
+        project = self._lifecycle("c9-closure-auto")
+        closure = h.audit_closure_flags(project)
+        proc, payload = h.run_cli(
+            project, "audit", "package", "--task", "demo-task",
+            "--iteration", "1")
+        self.assertTrue(payload["ok"])
+        manifest = self._manifest(project, payload["package"])
+        self.assertEqual(
+            [(entry["role"], entry["path"]) for entry in
+             manifest["inputs"]], closure)
+
+    def test_verify_refuses_manifest_omitting_candidate_member(self):
+        project = self._lifecycle("c9-closure-verify")
+        closure = h.audit_closure_flags(project)
+        proc, payload = self._build_package(project, closure)
+        package = payload["package"]
+        manifest = self._manifest(project, package)
+        manifest["inputs"] = [entry for entry in manifest["inputs"]
+                              if entry["path"] != "src/demo.py"]
+        manifest["input_count"] = len(manifest["inputs"])
+        manifest["total_bytes"] = sum(entry["bytes"]
+                                      for entry in manifest["inputs"])
+        self._rewrite_payload(project, package, manifest)
+        h.expect_refusal(project, "audit", "verify", "--task",
+                         "demo-task", "--package", package,
+                         code="AUDIT_CLOSURE_MISMATCH")
+
+    def test_verify_revalidates_envelope_before_deriving_closure(self):
+        project = self._lifecycle("c9-closure-envelope-tamper")
+        closure = h.audit_closure_flags(project)
+        proc, payload = self._build_package(project, closure)
+        package = payload["package"]
+
+        envelope_dir = (project / ".agent-loop" / "tasks" / "demo-task" /
+                        "attempts" / "attempt_00000001" / "envelope")
+        envelope_path = sorted(envelope_dir.glob("envelope_*.json"))[-1]
+        envelope = json.loads(envelope_path.read_text("utf-8"))
+        envelope["members"] = [member for member in envelope["members"]
+                               if member["path"] != "src/demo.py"]
+        _envelope_json_write(envelope_path, envelope)
+
+        manifest = self._manifest(project, package)
+        manifest["inputs"] = [entry for entry in manifest["inputs"]
+                              if entry["path"] != "src/demo.py"]
+        manifest["input_count"] = len(manifest["inputs"])
+        manifest["total_bytes"] = sum(entry["bytes"]
+                                      for entry in manifest["inputs"])
+        self._rewrite_payload(project, package, manifest)
+        h.expect_refusal(project, "audit", "verify", "--task",
+                         "demo-task", "--package", package,
+                         code="CANDIDATE_MEMBER_SET_DRIFT")
+
+    def test_optional_audit_subset_still_allowed(self):
+        project = self._lifecycle("c9-closure-optional",
+                                  audit_required=False)
+        proc, payload = self._build_package(
+            project, [("instruction", "task.json")])
+        self.assertTrue(payload["ok"])
+
+
+class C9_PrelaunchStdinVerification(unittest.TestCase):
+    """CONTINUATION 9 / D2: the ENGINEER launch boundary must run the
+    full read-only pack verification before any claim/run/child — a
+    synchronized outer-hash update or any member drift refuses, a
+    context-stdin launch records no timing state, and a repair pack is
+    admitted only when the current attempt binds exactly that verified
+    pack iteration with a receipt still binding the current bytes."""
+
+    def setUp(self):
+        self.project = h.fresh_project("c9-stdin", self)
+        h.write_task(self.project)
+        h.write_child(self.project, "check_demo.py", h.check_script(True))
+        h.authority(self.project)
+
+    def _assert_no_claim_or_run(self):
+        claims = self.project / ".agent-loop" / "claims"
+        runs = self.project / ".agent-loop" / "runs"
+        self.assertFalse(claims.is_dir() and any(claims.iterdir()))
+        self.assertFalse(runs.is_dir() and any(runs.iterdir()))
+
+    def _context_stdin_args(self):
+        return ("run", "--task", "demo-task", "--purpose", "ENGINEER",
+                "--session-id", "sess-engineer", "--stdin-file",
+                ".agent-loop/tasks/demo-task/context_pack.md")
+
+    def _synchronized_context_suffix(self):
+        directory = (self.project / ".agent-loop" / "tasks" /
+                     "demo-task")
+        pack_path = directory / "context_pack.md"
+        index_path = directory / "context_pack_index.json"
+        tampered = pack_path.read_bytes() + b"## Forged launch suffix\n"
+        pack_path.write_bytes(tampered)
+        index = json.loads(index_path.read_text("utf-8"))
+        index["payload_sha256"] = hashlib.sha256(tampered).hexdigest()
+        index_path.write_bytes(
+            (json.dumps(index, indent=2, sort_keys=True) + "\n")
+            .encode("utf-8"))
+
+    def test_synchronized_context_suffix_refused_at_launch(self):
+        h.run_cli(self.project, "context", "build", "--task",
+                  "demo-task")
+        self._synchronized_context_suffix()
+        h.expect_refusal(self.project, *self._context_stdin_args(),
+                         code="CONTEXT_VERIFY_REFUSED")
+        self._assert_no_claim_or_run()
+
+    def test_context_member_drift_refused_at_launch(self):
+        h.run_cli(self.project, "context", "build", "--task",
+                  "demo-task")
+        task_path = self.project / "task.json"
+        task = json.loads(task_path.read_text("utf-8"))
+        task["title"] = "drifted after pack build"
+        task_path.write_text(json.dumps(task, indent=2), "utf-8")
+        h.expect_refusal(self.project, *self._context_stdin_args(),
+                         code="CONTEXT_VERIFY_REFUSED")
+        self._assert_no_claim_or_run()
+
+    def test_context_stdin_launch_records_no_verify_timing(self):
+        h.run_cli(self.project, "context", "build", "--task",
+                  "demo-task")
+        proc, run = h.run_cli(self.project, *self._context_stdin_args())
+        self.assertEqual(run["exit_code"], 0)
+        self.assertFalse(
+            (self.project / ".agent-loop" / "tasks" / "demo-task" /
+             "timings.jsonl").is_file())
+
+    def _prepare_repair_pack(self, bind_attempt=True):
+        h.run_cli(self.project, "status", "set", "--task", "demo-task",
+                  "--status", "ACTIVE")
+        h.run_cli(self.project, "status", "set", "--task", "demo-task",
+                  "--status", "FIX_REQUIRED")
+        (self.project / "batch.md").write_text(
+            "# Repair batch\n\nfix\n", encoding="utf-8")
+        (self.project / "touched.md").write_text(
+            "- src/demo.py\n", encoding="utf-8")
+        h.run_cli(self.project, "pack", "build", "--task", "demo-task",
+                  "--iteration", "1", "--batch", "batch.md",
+                  "--touched", "touched.md")
+        h.run_cli(self.project, "pack", "verify", "--task",
+                  "demo-task", "--iteration", "1")
+        args = ["attempt", "open", "--task", "demo-task",
+                "--batch", "batch.md"]
+        if bind_attempt:
+            args += ["--pack-iteration", "1"]
+        h.run_cli(self.project, *args)
+
+    def _repair_stdin_args(self):
+        return ("run", "--task", "demo-task", "--purpose", "ENGINEER",
+                "--session-id", "sess-engineer", "--stdin-file",
+                ".agent-loop/tasks/demo-task/packs/iteration_1/"
+                "repair_pack.md")
+
+    def test_bound_verified_repair_stdin_still_launches(self):
+        self._prepare_repair_pack(bind_attempt=True)
+        proc, run = h.run_cli(self.project, *self._repair_stdin_args())
+        self.assertEqual(run["exit_code"], 0)
+
+    def test_repair_stdin_without_bound_iteration_refuses(self):
+        self._prepare_repair_pack(bind_attempt=False)
+        h.expect_refusal(self.project, *self._repair_stdin_args(),
+                         code="ENGINEER_STDIN_UNAUTHORIZED")
+        self._assert_no_claim_or_run()
+
+    def test_repair_stdin_with_stale_receipt_refuses(self):
+        self._prepare_repair_pack(bind_attempt=True)
+        pack_dir = (self.project / ".agent-loop" / "tasks" /
+                    "demo-task" / "packs" / "iteration_1")
+        pack_path = pack_dir / "repair_pack.md"
+        manifest_path = pack_dir / "manifest.json"
+        tampered = pack_path.read_bytes() + b"\n## Forged suffix\n"
+        pack_path.write_bytes(tampered)
+        manifest = json.loads(manifest_path.read_text("utf-8"))
+        manifest["pack"]["bytes"] = len(tampered)
+        manifest["pack"]["sha256"] = hashlib.sha256(tampered).hexdigest()
+        manifest_path.write_bytes(
+            (json.dumps(manifest, ensure_ascii=True, sort_keys=True,
+                        indent=2) + "\n").encode("utf-8"))
+        h.expect_refusal(self.project, *self._repair_stdin_args(),
+                         code="ATTEMPT_PACK_DRIFT")
+        self._assert_no_claim_or_run()
+
+    def test_repair_stdin_with_deleted_receipt_refuses(self):
+        self._prepare_repair_pack(bind_attempt=True)
+        (self.project / ".agent-loop" / "tasks" / "demo-task" /
+         "packs" / "iteration_1" / "verification.json").unlink()
+        h.expect_refusal(self.project, *self._repair_stdin_args(),
+                         code="PACK_NOT_VERIFIED")
+        self._assert_no_claim_or_run()
+
+
+class C9_BoundedTransmissionRead(unittest.TestCase):
+    """CONTINUATION 9 / D3: the transmission byte cap must hold on the
+    bytes actually read, not only on the pre-read stat size. A
+    controlled growing reader (stat reports a small file, the read
+    returns more than the cap) must never yield more than the
+    documented cap from ``read_regular_file``."""
+
+    def test_growth_race_never_returns_more_than_cap(self):
+        from agent_loop.errors import UALError
+        from agent_loop.paths import read_regular_file
+        project = h.fresh_project("c9-grow", None)
+        try:
+            (project / "stdin.txt").write_bytes(b"small\n")
+            cap = 64
+            growing_reader = unittest.mock.patch.object(
+                Path, "read_bytes", lambda self: b"x" * (cap + 1))
+            with growing_reader:
+                data = read_regular_file(project, "stdin.txt",
+                                         label="STDIN", max_bytes=cap)
+            self.assertLessEqual(
+                len(data), cap,
+                f"read_regular_file returned {len(data)} bytes over "
+                f"the {cap}-byte cap after a simulated growth race")
+            self.assertEqual(
+                read_regular_file(project, "stdin.txt", label="STDIN",
+                                  max_bytes=6), b"small\n")
+        finally:
+            shutil.rmtree(project, ignore_errors=True)
 
 
 if __name__ == "__main__":

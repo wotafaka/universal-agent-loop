@@ -102,11 +102,19 @@ for one project does not automatically authorize transmission from another proje
 - External file transmission (`run --stdin-file` / `--basis-file`) resolves through the
   containment primitive only: absolute paths, `..`, symlink/junction components and
   non-regular files refuse before any claim, run or child exists. Reads happen once under
-  documented hard byte caps (stdin 8 MiB, basis 1 MiB) before the claim is acquired.
+  documented hard byte caps (stdin 8 MiB, basis 1 MiB), and the cap holds on the bytes
+  actually read — one open reads at most cap+1 bytes, so a growth race between the size
+  check and the read can never return more than the cap — before the claim is acquired.
   ENGINEER stdin must additionally be an immutable task-authorized pack — this task's
   digest-verified context pack or a manifest-bound repair pack for the attempt's bound
-  iteration — and must pass the conservative secret scan before any claim/run/child;
-  ordinary non-engineer uses stay provider-neutral and contained.
+  iteration — and must pass the conservative secret scan before any claim/run/child.
+  At that launch boundary a context-pack stdin must also pass the full read-only
+  closure/hash/re-render verification (a synchronized suffix with an updated outer
+  hash, or any live-member drift, refuses; no timing state is recorded there), and a
+  repair-pack stdin must bind the current attempt's exact `progress.pack_iteration`,
+  carry a write-once verification receipt still binding the current pack+manifest
+  bytes, and pass the full read-only pack re-render. Ordinary non-engineer uses stay
+  provider-neutral and contained.
 
 ## Mechanical supervision first; optional AI observer
 
@@ -210,7 +218,15 @@ and requires byte equality: exact task and directory iteration, canonical path o
 only the three declared input roles (`input`, `instruction`, `validation`), unique
 complete declared input set, per-input live byte counts and hashes, declared totals,
 exact framing and no trailing or unlisted bytes — synchronized payload+manifest
-tampering refuses. Repair
+tampering refuses. When the task itself requires the audit, the package must carry the
+exact candidate closure derived from the canonical live task plus the current frozen
+envelope — the task contract, every frozen candidate member (allowlist plus report),
+every required skill, and the decisive frozen validation evidence paths — with
+identical identity, roles and order at build, verify, record and acceptance. Missing,
+extra, duplicate, reordered or relabelled closure members refuse; when the caller
+declares no inputs at all the builder auto-derives the whole closure, so caller
+authority over the package contents is removed rather than duplicated and a task-only
+subset can never pass while the outer hashes still look valid. Repair
 packs and context packs verify the same way: the verifier re-derives the expected member
 set from the live task contract, re-renders the pack from manifest/index-bound live
 inputs and compares bytes, so a self-consistent outer hash without the exact embedded

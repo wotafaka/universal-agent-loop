@@ -31,7 +31,10 @@ building and engineer verification: that would invalidate the pack's own hashes.
 
 Engineer verifies first, before edits. Verification re-renders the pack bytes from the
 manifest-bound live inputs and requires byte equality, so a synchronized manifest+pack
-edit cannot pass as verified. A verified pack replaces repeated historical
+edit cannot pass as verified. The runtime enforces the same rule at launch: ENGINEER
+stdin is re-verified read-only before any claim or child, and a repair pack is admitted
+only for the exact pack iteration the current attempt binds, with its verification
+receipt still binding the current bytes. A verified pack replaces repeated historical
 reading, not safety obligations. On mismatch use full canonical startup and re-establish
 current authority; never work from a failed pack. Closeout bookkeeping resumes only at
 the declared end. Do not call a legacy startup command first when it itself refreshes

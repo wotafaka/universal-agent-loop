@@ -220,6 +220,42 @@ def envelope_binding_section(project):
             "- Frozen envelope sha256: `" + digest + "`\n")
 
 
+def audit_closure_flags(project):
+    """Independently derive the required-audit input closure for the
+    demo-task fixture from its frozen envelope (task contract, frozen
+    candidate members, required skills, decisive validation evidence),
+    returned as (role, rel) pairs in canonical path order."""
+    attempts_root = (Path(project) / ".agent-loop" / "tasks" /
+                     "demo-task" / "attempts")
+    envelope_dir = sorted(attempts_root.glob("attempt_*"))[-1] / "envelope"
+    envelope = json.loads(
+        sorted(envelope_dir.glob("envelope_*.json"))[-1]
+        .read_text("utf-8"))
+    claimed = {}
+
+    def claim(role, rel):
+        claimed.setdefault(rel, role)
+
+    claim("instruction", "task.json")
+    for member in envelope.get("members") or []:
+        claim("input", member["path"])
+    for skill in envelope.get("skills") or []:
+        claim("instruction", skill["path"])
+    for bound in (envelope.get("validation_logs") or []) + \
+            (envelope.get("capture_closure") or []):
+        claim("validation", bound["path"])
+    return [(claimed[rel], rel) for rel in sorted(claimed)]
+
+
+def audit_cli_flags(pairs):
+    args = []
+    role_flags = {"input": "--input", "instruction": "--instruction",
+                  "validation": "--validation"}
+    for role, rel in pairs:
+        args += [role_flags[role], rel]
+    return args
+
+
 def sys_executable():
     return sys.executable
 

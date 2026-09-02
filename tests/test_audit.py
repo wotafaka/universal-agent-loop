@@ -44,9 +44,9 @@ class AuditFlowBase(unittest.TestCase):
     def build_package(self, iteration=1, expect=0):
         return h.run_cli(
             self.project, "audit", "package", "--task", "demo-task",
-            "--iteration", str(iteration), "--input", "src/demo.py",
-            "--instruction", "task.json",
-            "--validation", "report/IMPLEMENTATION.md", expect=expect)
+            "--iteration", str(iteration),
+            *h.audit_cli_flags(h.audit_closure_flags(self.project)),
+            expect=expect)
 
     def write_result(self, payload, name="audit_result.json"):
         path = self.project / name
@@ -102,10 +102,31 @@ class AuditPackageTests(AuditFlowBase):
         self.assertEqual(manifest_one, manifest)
 
     def test_secret_material_refused(self):
-        (self.project / "secretish.txt").write_bytes(
+        project = h.fresh_project("auditsecret", self)
+        h.write_task(project)
+        h.write_child(project, "check_demo.py", h.check_script(True))
+        h.authority(project)
+        for argv_run in range(2):
+            proc, run = h.run_cli(
+                project, "run", "--task", "demo-task", "--purpose",
+                "VALIDATION",
+                "--argv-json", json.dumps(
+                    [h.sys_executable(), "check_demo.py"]))
+            h.run_cli(project, "validate", "record", "--task",
+                      "demo-task", "--run", run["run_id"], "--ordinal",
+                      "1")
+            if argv_run == 0:
+                (project / "src" / "demo.py").write_bytes(b"VALUE = 2\n")
+        (project / "report" / "IMPLEMENTATION.md").write_text(
+            "done\n", encoding="utf-8")
+        h.run_cli(project, "refresh", "--task", "demo-task")
+        h.run_cli(project, "report-check", "--task", "demo-task")
+        h.run_cli(project, "close", "--task", "demo-task")
+        h.run_cli(project, "envelope", "freeze", "--task", "demo-task")
+        (project / "secretish.txt").write_bytes(
             b"api" + b"_key = deadbeef\n")
         h.expect_refusal(
-            self.project, "audit", "package", "--task", "demo-task",
+            project, "audit", "package", "--task", "demo-task",
             "--iteration", "1", "--input", "secretish.txt",
             code="SECRET_MATERIAL_SUSPECTED")
 

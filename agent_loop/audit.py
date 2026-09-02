@@ -7,7 +7,10 @@ a real result and never an outage; fallback requires both an explicit
 policy and an objective route failure, and a local package-integrity
 failure is BLOCKED, never a reason to transmit elsewhere. When a task requires
 an audit and config names a primary auditor, missing observed model identity
-fails closed instead of being accepted as UNKNOWN.
+fails closed instead of being accepted as UNKNOWN. A package for a
+required audit must carry the exact candidate closure derived from the
+canonical live task plus the current frozen envelope — identical
+identity, roles and order at build, verify, record and acceptance.
 """
 from __future__ import annotations
 
@@ -52,6 +55,54 @@ def render_package_payload(entries) -> bytes:
     return b"".join(chunks)
 
 
+def required_audit_closure(envelope: dict) -> list:
+    """The deterministic required-audit input closure, derived from the
+    frozen envelope (which ``verify_envelope`` binds to the canonical
+    live task): the task contract, every frozen candidate member
+    (allowlist plus report), every required skill, and the decisive
+    frozen validation evidence paths (counted validation logs plus the
+    declared command scripts/fixtures). Returns ``(role, rel)`` pairs in
+    canonical path order; the first claim wins on the non-overlapping
+    categories, so the derivation is a pure function of the envelope —
+    a caller declaration can neither widen nor narrow it."""
+    claimed: dict = {}
+
+    def claim(role, rel):
+        if isinstance(rel, str) and rel and rel not in claimed:
+            claimed[rel] = role
+
+    claim("instruction", "task.json")
+    for member in envelope.get("members") or []:
+        claim("input", (member or {}).get("path"))
+    for skill in envelope.get("skills") or []:
+        claim("instruction", (skill or {}).get("path"))
+    for bound in list(envelope.get("validation_logs") or []) + \
+            list(envelope.get("capture_closure") or []):
+        claim("validation", (bound or {}).get("path"))
+    return sorted(((role, rel) for rel, role in claimed.items()),
+                  key=lambda pair: pair[1])
+
+
+def _closure_mismatch(expected: list, declared: list) -> str:
+    expected_rels = {rel for _role, rel in expected}
+    declared_rels = {rel for _role, rel in declared}
+    detail = [f"missing:{rel}" for _role, rel in expected
+              if rel not in declared_rels][:3]
+    detail += [f"extra:{rel}" for _role, rel in declared
+               if rel not in expected_rels][:3]
+    detail += [f"role:{rel}" for role, rel in declared
+               if rel in expected_rels and (role, rel) not in expected][:3]
+    return ";".join(detail)
+
+
+def _live_task(project: Path) -> dict:
+    from .taskfile import load_task
+    task_path = Path(project) / "task.json"
+    if not task_path.is_file():
+        raise UALError("TASK_MISSING", "task.json")
+    return load_task(task_path)
+
+
 def audit_dir(project: Path, task_id: str, iteration: int) -> Path:
     from .attempts import current_dir
     return (current_dir(project, task_id) / "audit" /
@@ -75,6 +126,23 @@ def build_package(project: Path, task: dict, iteration: int,
             raise UALError("AUDIT_ROLE_INVALID", role)
         for rel in rels:
             collected.append((role, rel))
+    if bool((task.get("audit") or {}).get("required")):
+        # A required audit must carry the exact candidate closure
+        # derived from the canonical live task plus this frozen
+        # envelope — outer candidate/envelope hashes do not let the
+        # auditor inspect or recompute omitted bytes. The envelope is
+        # re-verified here so the closure is canonical, a caller
+        # declaration must equal it exactly, and an empty declaration
+        # auto-derives it (removing, not duplicating, caller
+        # authority).
+        envelope_mod.verify_envelope(project, task)
+        expected = required_audit_closure(envelope)
+        declared = sorted(collected, key=lambda pair: pair[1])
+        if collected and declared != expected:
+            raise UALError("AUDIT_CLOSURE_MISMATCH",
+                           _closure_mismatch(expected, declared))
+        if not collected:
+            collected = list(expected)
     if not collected:
         raise UALError("AUDIT_NO_INPUTS", task_id)
     if len(collected) > MAX_INPUTS:
@@ -222,6 +290,20 @@ def verify_package(project: Path, task_id: str, package_rel: str) -> dict:
         raise UALError("AUDIT_PAYLOAD_CONTENT_MISMATCH",
                        "payload bytes differ from the re-rendered "
                        "manifest-bound inputs")
+    task = _live_task(project)
+    if bool((task.get("audit") or {}).get("required")):
+        from . import envelope as envelope_mod
+        envelope_mod.verify_envelope(project, task)
+        loaded = envelope_mod.latest_envelope(project, task_id)
+        if loaded is None:
+            raise UALError("AUDIT_ENVELOPE_REQUIRED", task_id)
+        _envelope_path, current_envelope = loaded
+        expected = required_audit_closure(current_envelope)
+        declared_pairs = [(entry["role"], entry["path"])
+                          for entry in declared]
+        if declared_pairs != expected:
+            raise UALError("AUDIT_CLOSURE_MISMATCH",
+                           _closure_mismatch(expected, declared_pairs))
     return {"ok": True, "package": package_rel,
             "manifest_sha256": sha256_hex(manifest_path.read_bytes()),
             "payload_sha256": sha256_hex(payload),

@@ -203,7 +203,14 @@ def current_attempt_events(project: Path, task_id: str) -> Path:
     return attempt_dir(project, task_id, seq) / "events.jsonl"
 
 
-def verify_pack(project: Path, task: dict, pack_rel: str) -> dict:
+def verify_pack_readonly(project: Path, task: dict, pack_rel: str) -> list:
+    """Read-only full context-pack verification: index identity, exact
+    live-closure member set, every index-bound live input hash, and a
+    byte-exact re-render of the pack from those inputs. Returns an
+    error list; empty means the pack still matches the repository.
+    Writes nothing (no timing record), so it is safe at the prelaunch
+    stdin boundary. Identity failures raise the same refusals as the
+    measured ``verify_pack``; content failures are returned."""
     pack_path = resolve_inside(project, pack_rel, label="PACK")
     if not pack_path.is_file():
         raise UALError("CONTEXT_PACK_MISSING", pack_rel)
@@ -220,7 +227,6 @@ def verify_pack(project: Path, task: dict, pack_rel: str) -> dict:
     pack_bytes = pack_path.read_bytes()
     if index.get("payload_sha256") != sha256_hex(pack_bytes):
         raise UALError("CONTEXT_PAYLOAD_DRIFT", pack_rel)
-    start = time.perf_counter()
     errors = []
     expected = []
     for rel, role in mandatory_closure(project, task):
@@ -254,6 +260,12 @@ def verify_pack(project: Path, task: dict, pack_rel: str) -> dict:
             _render_context_pack(task["id"], members, bodies) != pack_bytes:
         errors.append("CONTEXT_PAYLOAD_CONTENT_MISMATCH:pack bytes differ "
                       "from the re-rendered index-bound content")
+    return errors
+
+
+def verify_pack(project: Path, task: dict, pack_rel: str) -> dict:
+    start = time.perf_counter()
+    errors = verify_pack_readonly(project, task, pack_rel)
     restoration = time.perf_counter() - start
     if errors:
         raise UALError("CONTEXT_VERIFY_REFUSED", ";".join(errors[:4]))

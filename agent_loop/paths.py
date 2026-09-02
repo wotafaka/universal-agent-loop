@@ -73,8 +73,10 @@ def read_regular_file(project: Path, rel: str, *, label: str,
 
     Resolves ``rel`` inside ``project`` (absolute paths, drives and
     ``..`` escapes refuse), refuses any symlink or Windows junction
-    component along the way, requires a regular file, and enforces a
-    hard byte cap before any byte is returned."""
+    component along the way, requires a regular file, and enforces the
+    hard byte cap on the bytes actually read: one open reads at most
+    ``max_bytes + 1`` bytes, so a growth race between the size check
+    and the read can never return more than the cap."""
     path = resolve_inside(project, rel, label=label)
     current = Path(project).resolve(strict=False)
     for part in Path(rel).parts:
@@ -88,7 +90,11 @@ def read_regular_file(project: Path, rel: str, *, label: str,
         raise UALError(f"{label}_NOT_FILE", rel)
     if info.st_size > max_bytes:
         raise UALError(f"{label}_OVER_BOUND", rel)
-    return path.read_bytes()
+    with path.open("rb") as handle:
+        data = handle.read(max_bytes + 1)
+    if len(data) > max_bytes:
+        raise UALError(f"{label}_OVER_BOUND", rel)
+    return data
 
 
 def _is_junction(path: Path) -> bool:

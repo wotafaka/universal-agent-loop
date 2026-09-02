@@ -220,6 +220,37 @@ full suite 262 tests OK (3 honest symlink skips), reference smoke PASS, offline
 quickstart PASS. The changed bytes require a new exact-package independent audit;
 no earlier PASS transfers.
 
+Continuation 9 (2026-09-03, this working copy) closed three release-check-11
+launch/audit completeness gaps returned by an exact-package independent Sol fallback
+audit; Opus 5 was attempted first on the same immutable package and machine-observed
+`claude-opus-5` returned a terminal HTTP 429 with zero tokens. Continuation-8 repairs
+remain mandatory and unweakened. Each repair has a real RED→GREEN regression on the
+real CLI path: (D1) a required audit package must carry the exact candidate closure
+derived from the canonical live task plus the current frozen envelope — the task
+contract, every frozen candidate member (allowlist plus report), every required skill,
+and the decisive frozen validation evidence paths — with identical identity, roles and
+order at build, verify, audit record and acceptance; task-only, member-missing and
+relabelled declarations refuse, a closure-omitting manifest refuses verification, and
+an auto-derived mode builds the whole closure when the caller declares nothing (and
+re-verifies the envelope first), so caller authority is removed rather than duplicated;
+(D2) ENGINEER stdin now runs the full read-only pack verification at the prelaunch
+boundary: a synchronized context-pack suffix with an updated outer hash and live-member
+drift refuse with `CONTEXT_VERIFY_REFUSED` and no timing/state mutation, while a repair
+pack is admitted only when the current attempt binds exactly that
+`progress.pack_iteration`, the write-once verification receipt still binds the current
+pack+manifest bytes, and the full read-only re-render passes — all before any
+claim/run/child artifact; the positive repair-stdin fixture now opens a real
+pack-bound verified attempt instead of weakening the gate; (D3) `--stdin-file`/
+`--basis-file` enforce the byte cap on the bytes actually read (one open reads at most
+cap+1 bytes), so a growth race between the size check and the read cannot return more
+than the documented cap; a controlled growing-reader regression observed RED (65 bytes
+returned over a 64-byte cap) on the old two-step behavior. Observed locally on Windows/
+CPython 3.14: focused file 133 tests OK (3 honest symlink skips) after 12 intended RED
+failures (including the parent-reproduced synchronized envelope/package omission),
+full suite 278 tests OK (3 honest skips), reference smoke PASS, offline
+quickstart PASS. The changed bytes require a new exact-package independent audit;
+no earlier PASS transfers.
+
 The release manifest lists distribution paths, stored bytes and SHA-256. Bounded
 patterns cannot certify absence of all secrets. Raw development logs and independent
 messages remain outside the package; this summary is not a signed transcript. Validate

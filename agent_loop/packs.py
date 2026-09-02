@@ -49,19 +49,30 @@ def find_secret(data: bytes) -> str | None:
     return None
 
 
+def _live_task(project: Path) -> dict:
+    from .taskfile import load_task
+    task_path = Path(project) / "task.json"
+    if not task_path.is_file():
+        raise UALError("TASK_MISSING", "task.json")
+    return load_task(task_path)
+
+
 def verify_engineer_stdin(project: Path, task_id: str, rel: str,
                           data: bytes) -> str:
     """Authorize ENGINEER stdin as an immutable task-authorized pack.
 
     The only admitted payloads are this task's context pack (bytes
-    equal to the digest recorded in ``context_pack_index.json``) or a
-    manifest-bound repair pack for this task (bytes equal to the pack
-    digest in its ``manifest.json``; when the current attempt declares
-    a pack iteration, exactly that iteration). The conservative secret
-    scan runs after authorization. Anything else refuses before a
-    claim, log or child exists. Returns the pack kind."""
+    equal to the digest recorded in ``context_pack_index.json`` AND
+    still passing the full read-only closure/hash/re-render
+    verification) or a manifest-bound repair pack for this task whose
+    verification receipt binds the current pack+manifest bytes, whose
+    full read-only re-render still matches the live repository, and
+    whose iteration is exactly the ``progress.pack_iteration`` bound by
+    the current attempt. The conservative secret scan runs after
+    authorization. Anything else refuses before a claim, log or child
+    exists. Returns the pack kind."""
     from . import attempts
-    from .context import INDEX_MAX_BYTES
+    from .context import INDEX_MAX_BYTES, verify_pack_readonly
     normalized = Path(rel.replace("\\", "/"))
     task_prefix = Path(".agent-loop") / "tasks" / task_id
     kind = None
@@ -76,6 +87,16 @@ def verify_engineer_stdin(project: Path, task_id: str, rel: str,
                     index.get("task") == task_id and \
                     index.get("payload_sha256") == sha256_hex(data):
                 kind = "CONTEXT_PACK"
+        if kind == "CONTEXT_PACK":
+            # Full read-only verification at this prelaunch boundary:
+            # a synchronized safe suffix with an updated outer hash, or
+            # any live-member drift, refuses with no timing/state
+            # mutation.
+            errors = verify_pack_readonly(project, _live_task(project),
+                                          rel)
+            if errors:
+                raise UALError("CONTEXT_VERIFY_REFUSED",
+                               ";".join(errors[:4]))
     else:
         parts = normalized.parts
         packs_prefix = tuple((task_prefix / "packs").parts)
@@ -101,17 +122,25 @@ def verify_engineer_stdin(project: Path, task_id: str, rel: str,
                             (manifest.get("pack") or {}).get("sha256") \
                             == sha256_hex(data):
                         kind = "REPAIR_PACK"
-    if kind is None:
-        raise UALError("ENGINEER_STDIN_UNAUTHORIZED", rel)
-    if kind == "REPAIR_PACK" and iteration is not None:
-        seq = attempts.current_seq(project, task_id)
-        if seq is not None:
-            payload = attempts.current_payload(project, task_id)
-            bound = (payload.get("progress") or {}).get("pack_iteration")
-            if bound is not None and bound != iteration:
+        if kind == "REPAIR_PACK" and iteration is not None:
+            seq = attempts.current_seq(project, task_id)
+            bound = None
+            if seq is not None:
+                payload = attempts.current_payload(project, task_id)
+                bound = (payload.get("progress") or {}).get(
+                    "pack_iteration")
+            if bound is None or bound != iteration:
                 raise UALError("ENGINEER_STDIN_UNAUTHORIZED",
                                f"attempt {seq} binds pack iteration "
                                f"{bound}, not {iteration}")
+            from .attempts import _require_verified_pack
+            # Receipt must exist and bind the current pack+manifest
+            # bytes, then the full read-only re-render revalidates every
+            # manifest-bound live input.
+            _require_verified_pack(project, task_id, iteration,
+                                   current=False)
+    if kind is None:
+        raise UALError("ENGINEER_STDIN_UNAUTHORIZED", rel)
     category = find_secret(data)
     if category is not None:
         raise UALError("SECRET_MATERIAL_SUSPECTED", f"{category}:{rel}")
