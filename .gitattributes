@@ -1,2 +1,6 @@
 # Exact stored bytes are part of the preserved reference's contract.
 /reference/** -text
+
+# The curated pilot carries byte-bound provenance hashes.  Prevent checkout
+# line-ending conversion from changing those public evidence bytes on Windows.
+/examples/lineclean/** -text
